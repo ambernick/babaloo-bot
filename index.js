@@ -28,6 +28,11 @@ client.on('messageCreate', (message) => {
     if (message.content === '!hello') {
     message.reply(`👋 Hey ${message.author.username}! I'm Babaloo!`);
   }
+    // Respond to !help command
+    if (message.content === '!help') {
+    message.reply('**Available Commands:**\n`!ping` - Test if I\'m alive\n`!hello` - Get a greeting\n`!help` - Show this message');
+  }
 });
+
 // Login to Discord with your token
 client.login(process.env.DISCORD_TOKEN);
