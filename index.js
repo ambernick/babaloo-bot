@@ -1,38 +1,74 @@
-// Load environment variables from .env file
 require('dotenv').config();
-// Import Discord.js library
-const { CLient, GatewayIntentBits, Client } = require('discord.js');
-// Create a new Discord client (your bot)
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+const Logger = require('./src/utils/logger');
+
+// Create Discord client
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,              // Access to server info
-        GatewayIntentBits.GuildMessages,       // Read messages in server
-        GatewayIntentBits.MessageContent,      // Read message text
-    ]
-});
-// This runs ONCE when bot comes online
-client.once('clientReady', () => {
-    console.log(`✅ Logged in as ${client.user.tag}!`);
-    console.log(`🤖 Bot is online and ready!`);
-    console.log(`👥 Serving ${client.guilds.cache.size} servers`);
-});
-// This runs EVERY TIME someone sends a message
-client.on('messageCreate', (message) => {
-    // Ignore messages from bots (including ourselves)
-    if(message.author.bot) return;
-    // Respond to !ping command
-    if (message.content === '!ping') {
-        message.reply('🏓 Pong!');
-      }
-      // Respond to !hello command
-    if (message.content === '!hello') {
-    message.reply(`👋 Hey ${message.author.username}! I'm Babaloo!`);
-  }
-    // Respond to !help command
-    if (message.content === '!help') {
-    message.reply('**Available Commands:**\n`!ping` - Test if I\'m alive\n`!hello` - Get a greeting\n`!help` - Show this message');
-  }
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
+  ]
 });
 
-// Login to Discord with your token
-client.login(process.env.DISCORD_TOKEN);
+// Initialize commands collection
+client.commands = new Collection();
+
+// Load all commands
+function loadCommands() {
+  Logger.info('Loading commands...');
+  
+  const commandFolders = fs.readdirSync(path.join(__dirname, 'src/commands'));
+  
+  for (const folder of commandFolders) {
+    const commandPath = path.join(__dirname, 'src/commands', folder);
+    const commandFiles = fs.readdirSync(commandPath).filter(file => file.endsWith('.js'));
+    
+    for (const file of commandFiles) {
+      const command = require(path.join(commandPath, file));
+      client.commands.set(command.name, command);
+      Logger.success(`Loaded command: ${command.name} (${folder})`);
+    }
+  }
+}
+
+// Load all events
+function loadEvents() {
+  Logger.info('Loading events...');
+  
+  const eventFiles = fs.readdirSync(path.join(__dirname, 'src/events'))
+    .filter(file => file.endsWith('.js'));
+  
+  for (const file of eventFiles) {
+    const event = require(path.join(__dirname, 'src/events', file));
+    
+    if (event.once) {
+      client.once(event.name, (...args) => event.execute(...args, client));
+    } else {
+      client.on(event.name, (...args) => event.execute(...args, client));
+    }
+    
+    Logger.success(`Loaded event: ${event.name}`);
+  }
+}
+
+// Initialize bot
+Logger.info('🚀 Starting Babaloo Bot...');
+loadCommands();
+loadEvents();
+
+// Login to Discord
+client.login(process.env.DISCORD_TOKEN).catch(err => {
+  Logger.error('Failed to login:', err);
+  process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  Logger.info('👋 Shutting down gracefully...');
+  client.destroy();
+  process.exit(0);
+});
