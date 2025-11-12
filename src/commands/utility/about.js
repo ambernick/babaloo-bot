@@ -3,7 +3,7 @@ const config = require('../../config/config');
 module.exports = {
   name: 'about',
   description: 'Information about Babaloo Bot',
-  usage: '!about',
+  usage: '!about', 
   category: 'utility',
   
   async execute(message, args, client) {
