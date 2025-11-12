@@ -11,8 +11,8 @@ const client = new Client({
     ]
 });
 // This runs ONCE when bot comes online
-client.once('ready', () => {
-    console.log('✅ Logged in as ${client.user.tag}!');
+client.once('clientReady', () => {
+    console.log(`✅ Logged in as ${client.user.tag}!`);
     console.log(`🤖 Bot is online and ready!`);
     console.log(`👥 Serving ${client.guilds.cache.size} servers`);
 });
