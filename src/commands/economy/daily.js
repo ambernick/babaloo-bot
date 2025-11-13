@@ -9,14 +9,20 @@ module.exports = {
   
   async execute(message, args) {
     try {
-      // Get user
-      const dbUser = await userService.getOrCreateUser(
+      // Get or create the user
+      const dbResult = await userService.getOrCreateUser(
         message.author.id,
         message.author.username
       );
 
+      if (!dbResult.success || !dbResult.user) {
+        return message.reply('❌ Could not find or create your user account!');
+      }
+
+      const dbUser = dbResult.user; // ✅ Extract the actual user
+
       // Attempt to claim daily
-      const result = await userService.claimDaily(dbUser.id);
+      const result = await userService.claimDaily(dbUser.id, message.author.username);
 
       if (!result.success) {
         return message.reply(`⏰ ${result.message}`);
