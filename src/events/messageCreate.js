@@ -1,5 +1,7 @@
 const config = require('../config/config');
 const Logger = require('../utils/logger');
+const chatTracker = require('../services/chatTracker');
+
 
 module.exports = {
   name: 'messageCreate',
