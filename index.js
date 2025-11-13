@@ -3,6 +3,8 @@ const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const Logger = require('./src/utils/logger');
+const chatTracker = require('./src/services/chatTracker');
+
 
 // Create Discord client
 const client = new Client({
