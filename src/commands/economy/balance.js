@@ -14,18 +14,24 @@ module.exports = {
       const targetUser = message.mentions.users.first() || message.author;
       
       // Get user from database
-      const dbUser = await userService.getOrCreateUser(
+      const dbResult = await userService.getOrCreateUser(
         targetUser.id, 
         targetUser.username
       );
 
-      if (!dbUser) {
+      if (!dbResult.success || !dbResult.user) {
         return message.reply('❌ User not found in database!');
       }
 
+      const dbUser = dbResult.user; // <-- access the actual user object
+
+      // Safely default currency values to 0
+      const currency = dbUser.currency ?? 0;
+      const premiumCurrency = dbUser.premium_currency ?? 0;
+
       // Calculate XP progress
-      const currentLevel = dbUser.level;
-      const currentXP = dbUser.xp;
+      const currentLevel = dbUser.level ?? 1;
+      const currentXP = dbUser.xp ?? 0;
       const xpForCurrent = (currentLevel - 1) ** 2 * 100;
       const xpForNext = currentLevel ** 2 * 100;
       const xpProgress = currentXP - xpForCurrent;
@@ -45,12 +51,12 @@ module.exports = {
         fields: [
           {
             name: '🪙 Currency',
-            value: `**${dbUser.currency.toLocaleString()}** coins`,
+            value: `**${currency.toLocaleString()}** coins`,
             inline: true
           },
           {
             name: '💎 Premium Currency',
-            value: `**${dbUser.premium_currency}** gems`,
+            value: `**${premiumCurrency.toLocaleString()}** gems`,
             inline: true
           },
           {
