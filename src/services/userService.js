@@ -35,6 +35,63 @@ class UserService {
       return { success: false, error: error.message };
     }
   }
+  // Award currency to user
+  async awardCurrency(userId, amount, category = 'chat', description = '') {
+    try {
+      // Update user currency
+      const result = await db.query(
+        `UPDATE users 
+         SET currency = currency + $1, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $2 
+         RETURNING *`,
+        [amount, userId]
+      );
+
+      // Log transaction
+      await db.query(
+        `INSERT INTO transactions (user_id, type, category, amount, description) 
+         VALUES ($1, 'earn', $2, $3, $4)`,
+        [userId, category, amount, description]
+      );
+
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error awarding currency:', error);
+      throw error;
+    }
+  }
+
+  // Award XP and check for level up
+  async awardXP(userId, amount, category = 'chat') {
+    try {
+      const result = await db.query(
+        `UPDATE users 
+         SET xp = xp + $1, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $2 
+         RETURNING *`,
+        [amount, userId]
+      );
+
+      const user = result.rows[0];
+      const oldLevel = user.level;
+      const newLevel = this.calculateLevel(user.xp);
+
+      // Level up!
+      if (newLevel > oldLevel) {
+        await db.query(
+          'UPDATE users SET level = $1 WHERE id = $2',
+          [newLevel, userId]
+        );
+
+        return { ...user, level: newLevel, leveledUp: true, oldLevel, newLevel };
+      }
+
+      return { ...user, leveledUp: false };
+    } catch (error) {
+      console.error('Error awarding XP:', error);
+      throw error;
+    }
+  }
 
   // Get user by Discord ID
   async getUser(discordId) {
@@ -96,6 +153,60 @@ class UserService {
   xpForNextLevel(currentLevel) {
     return (currentLevel ** 2) * 100;
   }
+   // Get user balance
+   async getBalance(discordId) {
+    const result = await db.query(
+      'SELECT currency, premium_currency, xp, level FROM users WHERE discord_id = $1',
+      [discordId]
+    );
+    return result.rows[0] || null;
+  }
+  // Daily bonus (can only claim once per 24 hours)
+  async claimDaily(userId) {
+    try {
+      // Check last daily claim
+      const lastClaim = await db.query(
+        `SELECT created_at FROM transactions 
+         WHERE user_id = $1 AND category = 'daily' 
+         ORDER BY created_at DESC LIMIT 1`,
+        [userId]
+      );
+
+      if (lastClaim.rows.length > 0) {
+        const lastClaimTime = new Date(lastClaim.rows[0].created_at);
+        const now = new Date();
+        const hoursSinceLastClaim = (now - lastClaimTime) / (1000 * 60 * 60);
+
+        if (hoursSinceLastClaim < 24) {
+          const hoursRemaining = Math.ceil(24 - hoursSinceLastClaim);
+          return { 
+            success: false, 
+            message: `You already claimed your daily bonus! Try again in ${hoursRemaining} hours.`,
+            hoursRemaining 
+          };
+        }
+      }
+
+      // Award daily bonus
+      const dailyAmount = 100;
+      const dailyXP = 50;
+
+      await this.awardCurrency(userId, dailyAmount, 'daily', 'Daily bonus');
+      await this.awardXP(userId, dailyXP, 'daily');
+
+      return {
+        success: true,
+        currency: dailyAmount,
+        xp: dailyXP,
+        message: `Daily bonus claimed! +${dailyAmount} 🪙 +${dailyXP} XP`
+      };
+    } catch (error) {
+      console.error('Error claiming daily:', error);
+      throw error;
+    }
+  }
+
 }
+
 
 module.exports = new UserService();
