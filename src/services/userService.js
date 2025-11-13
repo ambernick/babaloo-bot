@@ -62,7 +62,7 @@ class UserService {
         `SELECT 
           u.username,
           u.currency,
-          u.premium_currency
+          u.premium_currency,
           u.xp,
           u.level,
           u.created_at,
