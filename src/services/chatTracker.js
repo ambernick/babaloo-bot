@@ -62,6 +62,11 @@ class ChatTracker {
           `🎉 **${username}** just leveled up! **Level ${xpResult.oldLevel} → ${xpResult.newLevel}**`
         );
       }
+         // Check achievements after awarding currency/XP
+         const achievementService = require('./achievementService');
+         achievementService.autoCheckAchievements(user.id).catch(err => {
+           console.error('Error checking achievements:', err);
+         });
 
       // Clean up old hourly data occasionally
       if (Math.random() < 0.01) { // 1% chance per message
