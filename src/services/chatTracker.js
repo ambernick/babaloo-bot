@@ -68,22 +68,39 @@ class ChatTracker {
         );
         
         if (rewards.premiumReward > 0) {
-          await currencyService.awardPremiumCurrency(
-            user.id,
-            rewards.premiumReward,
-            'level_up',
-            `Level ${xpResult.newLevel} milestone`
-          );
+          // Check if awardPremiumCurrency exists, if not skip
+          if (typeof currencyService.awardPremiumCurrency === 'function') {
+            await currencyService.awardPremiumCurrency(
+              user.id,
+              rewards.premiumReward,
+              'level_up',
+              `Level ${xpResult.newLevel} milestone`
+            );
+          }
         }
         
-        // Check for level-based achievements
+        // Auto-check achievements after level-up
         const achievementService = require('./achievementService');
-        await achievementService.checkLevelAchievements(user.id, xpResult.newLevel);
+        const newAchievements = await achievementService.autoCheckAchievements(user.id);
+        
+        // Announce any new achievements
+        if (newAchievements && newAchievements.length > 0) {
+          for (const ach of newAchievements) {
+            await achievementService.announceAchievement(message.channel, message.author, ach);
+          }
+        }
+      } else {
+        // Still check achievements even without level-up (for message-count achievements)
+        const achievementService = require('./achievementService');
+        const newAchievements = await achievementService.autoCheckAchievements(user.id);
+        
+        // Only announce if there are new achievements
+        if (newAchievements && newAchievements.length > 0) {
+          for (const ach of newAchievements) {
+            await achievementService.announceAchievement(message.channel, message.author, ach);
+          }
+        }
       }
-
-      // Auto-check achievements
-      const achievementService = require('./achievementService');
-      await achievementService.autoCheckAchievements(user.id);
 
       // Clean up old hourly data occasionally
       if (Math.random() < 0.01) {
