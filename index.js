@@ -4,7 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const Logger = require('./src/utils/logger');
 const chatTracker = require('./src/services/chatTracker');
-
+const levelUp = require('./src/events/levelUp')
+const achievementService = require('./src/config/achievements');
 
 // Create Discord client
 const client = new Client({

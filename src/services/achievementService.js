@@ -1,43 +1,109 @@
+// src/services/achievementService.js
 const db = require('../database/connection');
 const currencyService = require('./currencyService');
 const xpService = require('./xpService');
+const achievementDefs = require('../config/achievements');
 
 class AchievementService {
-  // Get all achievements
-  async getAllAchievements() {
+  /**
+   * Initialize achievements in database from definitions
+   * Run this once on bot startup or when adding new achievements
+   */
+  async initializeAchievements() {
     try {
-      const result = await db.query(
-        'SELECT * FROM achievements ORDER BY category, name'
-      );
-      return { success: true, achievements: result.rows };
+      for (const [key, ach] of Object.entries(achievementDefs)) {
+        await db.query(
+          `INSERT INTO achievements (name, description, category, reward_currency, reward_premium_currency, reward_xp, rarity) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7) 
+           ON CONFLICT (name) DO UPDATE SET
+             description = EXCLUDED.description,
+             reward_currency = EXCLUDED.reward_currency,
+             reward_premium_currency = EXCLUDED.reward_premium_currency,
+             reward_xp = EXCLUDED.reward_xp,
+             rarity = EXCLUDED.rarity`,
+          [
+            ach.name,
+            ach.description,
+            ach.category,
+            ach.reward_currency,
+            ach.reward_premium_currency || 0,
+            ach.reward_xp,
+            ach.rarity
+          ]
+        );
+      }
+      console.log('✅ Achievements initialized');
     } catch (error) {
-      console.error('Error getting achievements:', error);
-      return { success: false, error: error.message };
+      console.error('Error initializing achievements:', error);
     }
   }
 
-  // Get user's achievements
-  async getUserAchievements(userId) {
+  /**
+   * Get comprehensive user stats for achievement checking
+   */
+  async getUserStats(userId) {
     try {
       const result = await db.query(
         `SELECT 
-          a.*,
-          ua.progress,
-          ua.completed_at,
-          ua.required
-         FROM achievements a
-         LEFT JOIN user_achievements ua ON a.id = ua.achievement_id AND ua.user_id = $1
-         ORDER BY ua.completed_at DESC NULLS LAST, a.category, a.name`,
+          u.level,
+          u.currency,
+          u.xp,
+          u.twitch_id IS NOT NULL as has_twitch_linked,
+          up.streak_days as daily_streak,
+          COUNT(DISTINCT CASE WHEN t.type = 'earn' AND t.category = 'chat' THEN t.id END) as message_count,
+          COUNT(DISTINCT CASE WHEN t.type = 'spend' THEN t.id END) as purchases,
+          COALESCE(SUM(CASE WHEN t.type = 'spend' THEN t.amount ELSE 0 END), 0) as total_spent,
+          0 as gifts_sent,
+          0 as unique_items,
+          0 as total_items
+         FROM users u
+         LEFT JOIN user_profiles up ON u.id = up.user_id
+         LEFT JOIN transactions t ON u.id = t.user_id
+         WHERE u.id = $1
+         GROUP BY u.id, up.streak_days`,
         [userId]
       );
-      return { success: true, achievements: result.rows };
+
+      return result.rows[0] || null;
     } catch (error) {
-      console.error('Error getting user achievements:', error);
-      return { success: false, error: error.message };
+      console.error('Error getting user stats:', error);
+      return null;
     }
   }
 
-  // Check and award achievement
+  /**
+   * Auto-check all achievements for a user
+   * Returns array of newly unlocked achievements
+   */
+  async autoCheckAchievements(userId) {
+    try {
+      const stats = await this.getUserStats(userId);
+      if (!stats) return [];
+
+      const newlyUnlocked = [];
+
+      // Check each achievement definition
+      for (const [key, ach] of Object.entries(achievementDefs)) {
+        // Check if condition is met
+        if (ach.checkCondition(stats)) {
+          const result = await this.checkAchievement(userId, ach.name);
+          
+          if (result.success && !result.alreadyCompleted) {
+            newlyUnlocked.push(result.achievement);
+          }
+        }
+      }
+
+      return newlyUnlocked;
+    } catch (error) {
+      console.error('Error auto-checking achievements:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Check and award a specific achievement
+   */
   async checkAchievement(userId, achievementName) {
     try {
       // Get achievement
@@ -81,6 +147,15 @@ class AchievementService {
         );
       }
 
+      if (achievement.reward_premium_currency > 0) {
+        await currencyService.awardPremiumCurrency(
+          userId,
+          achievement.reward_premium_currency,
+          'achievement',
+          `Achievement: ${achievement.name}`
+        );
+      }
+
       if (achievement.reward_xp > 0) {
         await xpService.awardXP(userId, achievement.reward_xp, 'achievement');
       }
@@ -100,96 +175,89 @@ class AchievementService {
     }
   }
 
-  // Update achievement progress
-  async updateProgress(userId, achievementName, progress) {
-    try {
-      // Get achievement
-      const achResult = await db.query(
-        'SELECT * FROM achievements WHERE name = $1',
-        [achievementName]
-      );
+  /**
+   * Announce achievement unlock in channel
+   */
+  async announceAchievement(channel, user, achievement) {
+    const rarityEmoji = {
+      common: '⚪',
+      uncommon: '🟢',
+      rare: '🔵',
+      epic: '🟣',
+      legendary: '🟠'
+    };
 
-      if (achResult.rows.length === 0) {
-        return { success: false, error: 'Achievement not found' };
-      }
-
-      const achievement = achResult.rows[0];
-
-      // Get or create user achievement record
-      let userAch = await db.query(
-        'SELECT * FROM user_achievements WHERE user_id = $1 AND achievement_id = $2',
-        [userId, achievement.id]
-      );
-
-      if (userAch.rows.length === 0) {
-        // Create new record
-        await db.query(
-          `INSERT INTO user_achievements (user_id, achievement_id, progress, required)
-           VALUES ($1, $2, $3, 1)`,
-          [userId, achievement.id, progress]
-        );
-      } else if (!userAch.rows[0].completed_at) {
-        // Update progress if not completed
-        await db.query(
-          'UPDATE user_achievements SET progress = $1 WHERE user_id = $2 AND achievement_id = $3',
-          [progress, userId, achievement.id]
-        );
-
-        // Check if now completed
-        if (progress >= userAch.rows[0].required) {
-          return await this.checkAchievement(userId, achievementName);
+    const embed = {
+      color: 0xFFD700,
+      title: '🏆 Achievement Unlocked!',
+      description: `**${user.username}** earned **${achievement.name}**!`,
+      fields: [
+        {
+          name: achievement.name,
+          value: achievement.description,
+          inline: false
+        },
+        {
+          name: 'Rarity',
+          value: `${rarityEmoji[achievement.rarity]} ${achievement.rarity.toUpperCase()}`,
+          inline: true
+        },
+        {
+          name: 'Rewards',
+          value: this.formatRewards(achievement),
+          inline: true
         }
-      }
+      ],
+      thumbnail: { url: user.displayAvatarURL({ dynamic: true }) },
+      timestamp: new Date()
+    };
 
-      return { success: true, progress };
+    await channel.send({ embeds: [embed] });
+  }
+
+  formatRewards(achievement) {
+    const parts = [];
+    if (achievement.reward_currency > 0) {
+      parts.push(`+${achievement.reward_currency} 🪙`);
+    }
+    if (achievement.reward_premium_currency > 0) {
+      parts.push(`+${achievement.reward_premium_currency} 💎`);
+    }
+    if (achievement.reward_xp > 0) {
+      parts.push(`+${achievement.reward_xp} XP`);
+    }
+    return parts.join('\n') || 'None';
+  }
+
+  // Keep existing methods: getAllAchievements, getUserAchievements, etc.
+  async getAllAchievements() {
+    try {
+      const result = await db.query(
+        'SELECT * FROM achievements ORDER BY category, name'
+      );
+      return { success: true, achievements: result.rows };
     } catch (error) {
-      console.error('Error updating progress:', error);
+      console.error('Error getting achievements:', error);
       return { success: false, error: error.message };
     }
   }
 
-  // Auto-check achievements based on stats
-  async autoCheckAchievements(userId) {
+  async getUserAchievements(userId) {
     try {
-      // Get user stats
-      const stats = await db.query(
+      const result = await db.query(
         `SELECT 
-          u.level,
-          u.currency,
-          u.xp,
-          (SELECT COUNT(*) FROM transactions WHERE user_id = u.id AND type = 'earn' AND category = 'chat') as message_count,
-          (SELECT COUNT(*) FROM user_achievements WHERE user_id = u.id AND completed_at IS NOT NULL) as achievements_completed
-         FROM users u
-         WHERE u.id = $1`,
+          a.*,
+          ua.progress,
+          ua.completed_at,
+          ua.required
+         FROM achievements a
+         LEFT JOIN user_achievements ua ON a.id = ua.achievement_id AND ua.user_id = $1
+         ORDER BY ua.completed_at DESC NULLS LAST, a.category, a.name`,
         [userId]
       );
-
-      if (stats.rows.length === 0) return;
-
-      const userStats = stats.rows[0];
-      const awarded = [];
-
-      // Check "First Steps" (send first message)
-      if (userStats.message_count >= 1) {
-        const result = await this.checkAchievement(userId, 'First Steps');
-        if (result.success) awarded.push(result.achievement);
-      }
-
-      // Check "Chatterbox" (100 messages)
-      if (userStats.message_count >= 100) {
-        const result = await this.checkAchievement(userId, 'Chatterbox');
-        if (result.success) awarded.push(result.achievement);
-      }
-
-      // Check "Level 10"
-      if (userStats.level >= 10) {
-        const result = await this.checkAchievement(userId, 'Level 10');
-        if (result.success) awarded.push(result.achievement);
-      }
-
-      return { success: true, awarded };
+      return { success: true, achievements: result.rows };
     } catch (error) {
-      console.error('Error auto-checking achievements:', error);
+      console.error('Error getting user achievements:', error);
       return { success: false, error: error.message };
     }
   }

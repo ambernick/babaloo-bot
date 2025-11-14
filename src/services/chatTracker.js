@@ -1,17 +1,16 @@
+// src/services/chatTracker.js
 const userService = require('./userService');
 const currencyService = require('./currencyService');
 const xpService = require('./xpService');
+const levelUpHandler = require('../events/levelUp');
 
 class ChatTracker {
   constructor() {
-    // Track last message time per user (prevent spam)
     this.lastMessageTime = new Map();
-    // Track messages this hour per user (rate limiting)
     this.messagesThisHour = new Map();
   }
 
   async handleMessage(message) {
-    // Ignore bots
     if (message.author.bot) return;
 
     const userId = message.author.id;
@@ -19,7 +18,6 @@ class ChatTracker {
     const now = Date.now();
 
     try {
-      // Get or create user
       const userResult = await userService.getOrCreateUser(userId, username);
       
       if (!userResult.success) {
@@ -31,23 +29,19 @@ class ChatTracker {
 
       // Rate limiting: Max 1 earn per minute
       const lastTime = this.lastMessageTime.get(userId) || 0;
-      const timeSinceLastEarn = (now - lastTime) / 1000 / 60; // minutes
+      const timeSinceLastEarn = (now - lastTime) / 1000 / 60;
 
-      if (timeSinceLastEarn < 1) {
-        return; // Too soon, no reward
-      }
+      if (timeSinceLastEarn < 1) return;
 
       // Hourly cap: Max 60 currency per hour
       const hourKey = `${userId}-${new Date().getHours()}`;
       const earnedThisHour = this.messagesThisHour.get(hourKey) || 0;
 
-      if (earnedThisHour >= 60) {
-        return; // Hit hourly cap
-      }
+      if (earnedThisHour >= 60) return;
 
       // Award currency and XP
-      const currencyEarned = 1; // 1 coin per minute of chatting
-      const xpEarned = 2; // 2 XP per message
+      const currencyEarned = 1;
+      const xpEarned = 2;
 
       await currencyService.awardCurrency(user.id, currencyEarned, 'chat', 'Chatting');
       const xpResult = await xpService.awardXP(user.id, xpEarned, 'chat');
@@ -56,20 +50,43 @@ class ChatTracker {
       this.lastMessageTime.set(userId, now);
       this.messagesThisHour.set(hourKey, earnedThisHour + currencyEarned);
 
-      // If leveled up, announce!
+      // Handle level-up with enhanced announcement
       if (xpResult.leveledUp) {
-        message.channel.send(
-          `🎉 **${username}** just leveled up! **Level ${xpResult.oldLevel} → ${xpResult.newLevel}**`
+        const rewards = await levelUpHandler.announce(
+          message.channel,
+          message.author,
+          xpResult.oldLevel,
+          xpResult.newLevel
         );
+        
+        // Award level-up rewards
+        await currencyService.awardCurrency(
+          user.id,
+          rewards.currencyReward,
+          'level_up',
+          `Level up to ${xpResult.newLevel}`
+        );
+        
+        if (rewards.premiumReward > 0) {
+          await currencyService.awardPremiumCurrency(
+            user.id,
+            rewards.premiumReward,
+            'level_up',
+            `Level ${xpResult.newLevel} milestone`
+          );
+        }
+        
+        // Check for level-based achievements
+        const achievementService = require('./achievementService');
+        await achievementService.checkLevelAchievements(user.id, xpResult.newLevel);
       }
-         // Check achievements after awarding currency/XP
-         const achievementService = require('./achievementService');
-         achievementService.autoCheckAchievements(user.id).catch(err => {
-           console.error('Error checking achievements:', err);
-         });
+
+      // Auto-check achievements
+      const achievementService = require('./achievementService');
+      await achievementService.autoCheckAchievements(user.id);
 
       // Clean up old hourly data occasionally
-      if (Math.random() < 0.01) { // 1% chance per message
+      if (Math.random() < 0.01) {
         this.cleanupHourlyData();
       }
     } catch (error) {
@@ -79,7 +96,7 @@ class ChatTracker {
 
   cleanupHourlyData() {
     const currentHour = new Date().getHours();
-    for (const [key, value] of this.messagesThisHour.entries()) {
+    for (const [key] of this.messagesThisHour.entries()) {
       const keyHour = parseInt(key.split('-')[1]);
       if (keyHour !== currentHour) {
         this.messagesThisHour.delete(key);
@@ -87,7 +104,6 @@ class ChatTracker {
     }
   }
 
-  // Reset hourly limits (can be called by cron job)
   resetHourlyLimits() {
     this.messagesThisHour.clear();
     console.log('✅ Hourly earning limits reset');
