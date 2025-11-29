@@ -1,10 +1,8 @@
-// src/commands/economy/balance.js
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const userService = require('../../services/userService');
 const config = require('../../config/config');
 
 module.exports = {
-  // This defines the slash command structure
   data: new SlashCommandBuilder()
     .setName('balance')
     .setDescription('Check your currency and XP balance')
@@ -15,16 +13,12 @@ module.exports = {
         .setRequired(false)
     ),
 
-  // Slash commands use 'interaction' instead of 'message'
   async execute(interaction) {
-    // Defer reply immediately - gives you 15 minutes to respond
     await interaction.deferReply();
 
     try {
-      // Get the user option (or default to command user)
       const targetUser = interaction.options.getUser('user') || interaction.user;
       
-      // Get user from database (same as before)
       const dbResult = await userService.getOrCreateUser(
         targetUser.id,
         targetUser.username
@@ -33,7 +27,7 @@ module.exports = {
       if (!dbResult.success || !dbResult.user) {
         return interaction.editReply({
           content: '❌ User not found in database!',
-          ephemeral: true // Only visible to command user
+          ephemeral: true
         });
       }
 
@@ -43,20 +37,17 @@ module.exports = {
       const currentLevel = dbUser.level ?? 1;
       const currentXP = dbUser.xp ?? 0;
 
-      // Calculate XP progress (same logic as before)
       const xpForCurrent = (currentLevel - 1) ** 2 * 100;
       const xpForNext = currentLevel ** 2 * 100;
       const xpProgress = currentXP - xpForCurrent;
       const xpNeeded = xpForNext - xpForCurrent;
       const progressPercent = Math.round((xpProgress / xpNeeded) * 100);
 
-      // Create progress bar
       const barLength = 10;
       const filledBars = Math.round((progressPercent / 100) * barLength);
       const emptyBars = barLength - filledBars;
       const progressBar = '█'.repeat(filledBars) + '░'.repeat(emptyBars);
 
-      // Use EmbedBuilder (new) instead of embed object (old)
       const embed = new EmbedBuilder()
         .setColor(config.colors.primary)
         .setTitle(`💰 ${targetUser.username}'s Balance`)
@@ -86,19 +77,16 @@ module.exports = {
         .setFooter({ text: 'Earn currency by chatting! Use /daily for bonus.' })
         .setTimestamp();
 
-      // Use editReply instead of reply (since we deferred)
       await interaction.editReply({ embeds: [embed] });
       
     } catch (error) {
       console.error('Error in balance command:', error);
       
-      // Handle errors gracefully
       const errorResponse = {
         content: '❌ Error fetching balance. Please try again!',
         ephemeral: true
       };
       
-      // Check if we already replied
       if (interaction.deferred) {
         await interaction.editReply(errorResponse);
       } else {

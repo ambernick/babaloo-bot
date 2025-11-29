@@ -32,11 +32,22 @@ function loadCommands() {
     
     for (const file of commandFiles) {
       const command = require(path.join(commandPath, file));
-      client.commands.set(command.name, command);
-      Logger.success(`Loaded command: ${command.name} (${folder})`);
+      
+      // Support both slash commands (data.name) and old commands (name)
+      const commandName = command.data ? command.data.name : command.name;
+      
+      if (commandName) {
+        client.commands.set(commandName, command);
+        Logger.success(`Loaded command: ${commandName} (${folder})`);
+      } else {
+        Logger.warn(`⚠️  Command in ${file} has no name!`);
+      }
     }
   }
+  
+  Logger.info(`Total commands loaded: ${client.commands.size}`);
 }
+
 
 // Load all events
 function loadEvents() {
