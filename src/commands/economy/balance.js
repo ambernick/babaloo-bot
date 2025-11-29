@@ -12,6 +12,7 @@ module.exports = {
         .setDescription('The user to check (defaults to yourself)')
         .setRequired(false)
     ),
+    category: 'economy',
 
   async execute(interaction) {
     await interaction.deferReply();

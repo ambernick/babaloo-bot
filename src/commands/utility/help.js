@@ -1,86 +1,88 @@
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const config = require('../../config/config');
 
 module.exports = {
-  name: 'help',
-  description: 'Show all available commands or info about a specific command',
-  usage: '!help [command]',
-  category: 'utility',
-  
-  async execute(message, args, client) {
-    const { prefix } = config;
-    
-    // If user asks for help with specific command
-    if (args[0]) {
-      const commandName = args[0].toLowerCase();
-      const command = client.commands.get(commandName);
-      
-      if (!command) {
-        return message.reply(`❌ Command \`${commandName}\` not found!`);
+  data: new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('Show all available commands or info about a specific command')
+    .addStringOption(option =>
+      option
+        .setName('command')
+        .setDescription('The command you want details about')
+        .setRequired(false)
+    ),
+    category: 'utility', // ⭐ REQUIRED ⭐
+
+
+  async execute(interaction, client) {
+    await interaction.deferReply();
+
+    const commandName = interaction.options.getString('command');
+
+    // ========== SPECIFIC COMMAND HELP ==========
+    if (commandName) {
+      const cmd = client.commands.get(commandName.toLowerCase());
+      if (!cmd) {
+        return interaction.editReply(`❌ Command **${commandName}** not found!`);
       }
-      
-      // Show detailed info about specific command
-      const embed = {
-        color: config.colors.info,
-        title: `📖 ${prefix}${command.name}`,
-        description: command.description,
-        fields: [
-          {
-            name: 'Usage',
-            value: `\`${command.usage}\``,
-            inline: false
-          },
+
+      const embed = new EmbedBuilder()
+        .setColor(config.colors.info)
+        .setTitle(`📖 /${cmd.data.name}`)
+        .setDescription(cmd.data.description)
+        .addFields(
           {
             name: 'Category',
-            value: command.category,
+            value: cmd.category || 'Uncategorized',
             inline: true
+          },
+          {
+            name: 'Usage',
+            value: `/${cmd.data.name}`,
+            inline: false
           }
-        ],
-        footer: {
-          text: 'Babaloo Bot'
-        },
-        timestamp: new Date()
-      };
-      
-      return message.reply({ embeds: [embed] });
+        )
+        .setFooter({ text: 'Babaloo Bot' })
+        .setTimestamp();
+
+      return interaction.editReply({ embeds: [embed] });
     }
-    
-    // Show all commands grouped by category
+
+    // ========== FULL COMMAND LIST ==========
     const categories = {};
-    
-    // Group commands by category
-    client.commands.forEach(cmd => {
-      if (!categories[cmd.category]) {
-        categories[cmd.category] = [];
-      }
-      categories[cmd.category].push(cmd);
-    });
-    
-    // Create fields for each category
-    const fields = Object.entries(categories).map(([category, commands]) => ({
-      name: `${getCategoryEmoji(category)} ${capitalize(category)}`,
-      value: commands
-        .map(c => `\`${prefix}${c.name}\` - ${c.description}`)
-        .join('\n'),
-      inline: false
-    }));
-    
-    // Create help embed
-    const embed = {
-      color: config.colors.primary,
-      title: '📚 Babaloo Bot Commands',
-      description: `Use \`${prefix}help [command]\` for detailed info about a specific command`,
-      fields: fields,
-      footer: {
-        text: 'Babaloo Bot v0.1 | falsettovibrato'
-      },
-      timestamp: new Date()
-    };
-    
-    message.reply({ embeds: [embed] });
+
+client.commands.forEach(cmd => {
+  const category = cmd.category || 'uncategorized';
+
+  if (!categories[category]) categories[category] = [];
+  categories[category].push(cmd);
+});
+
+const fields = Object.entries(categories).map(([category, commands]) => ({
+  name: `${getCategoryEmoji(category)} ${capitalize(category)}`,
+  value: commands
+  .map(c => {
+    const name = c?.data?.name ?? 'unknown';
+    const description = c?.data?.description ?? 'No description available.';
+    return `• \`/${name}\` — ${description}`;
+  })
+  .join('\n'),
+  inline: false
+}));
+
+    const embed = new EmbedBuilder()
+      .setColor(config.colors.primary)
+      .setTitle('📚 Babaloo Bot Commands')
+      .setDescription(`Use \`/help command:<name>\` for info on a specific command.`)
+      .addFields(fields)
+      .setFooter({ text: 'Babaloo Bot v0.1 | falsettovibrato' })
+      .setTimestamp();
+
+    return interaction.editReply({ embeds: [embed] });
   }
 };
 
-// Helper function to get emoji for category
+// Helper functions
 function getCategoryEmoji(category) {
   const emojis = {
     utility: '🛠️',
@@ -91,7 +93,6 @@ function getCategoryEmoji(category) {
   return emojis[category] || '📌';
 }
 
-// Helper function to capitalize first letter
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }

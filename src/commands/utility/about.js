@@ -1,26 +1,26 @@
+// src/commands/utility/about.js
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const config = require('../../config/config');
 
 module.exports = {
-  name: 'about',
-  description: 'Information about Babaloo Bot',
-  usage: '!about', 
-  category: 'utility',
-  
-  async execute(message, args, client) {
-    // Calculate bot uptime
+  data: new SlashCommandBuilder()
+    .setName('about')
+    .setDescription('Information about Babaloo Bot'),
+    category: 'utility', // ⭐ REQUIRED ⭐
+
+
+  async execute(interaction) {
     const uptime = process.uptime();
     const days = Math.floor(uptime / 86400);
     const hours = Math.floor((uptime % 86400) / 3600);
     const minutes = Math.floor((uptime % 3600) / 60);
     
-    const embed = {
-      color: config.colors.primary,
-      title: '🤖 About Babaloo Bot',
-      description: 'A custom multi-platform engagement bot for the falsettovibrato community',
-      thumbnail: {
-        url: client.user.displayAvatarURL()
-      },
-      fields: [
+    const embed = new EmbedBuilder()
+      .setColor(config.colors.primary)
+      .setTitle('🤖 About Babaloo Bot')
+      .setDescription('A custom multi-platform engagement bot for the falsettovibrato community')
+      .setThumbnail(interaction.client.user.displayAvatarURL())
+      .addFields(
         {
           name: '👨‍💻 Developer',
           value: 'falsettovibrato',
@@ -28,7 +28,7 @@ module.exports = {
         },
         {
           name: '📅 Version',
-          value: 'v0.1.0 - MVP Phase',
+          value: 'v2.0.0 - Slash Commands',
           inline: true
         },
         {
@@ -48,16 +48,13 @@ module.exports = {
         },
         {
           name: '📊 Stats',
-          value: `${client.guilds.cache.size} servers • ${client.users.cache.size} users`,
+          value: `${interaction.client.guilds.cache.size} servers • ${interaction.client.users.cache.size} users`,
           inline: false
         }
-      ],
-      footer: {
-        text: 'Built with Discord.js & PostgreSQL'
-      },
-      timestamp: new Date()
-    };
+      )
+      .setFooter({ text: 'Built with Discord.js & PostgreSQL' })
+      .setTimestamp();
     
-    message.reply({ embeds: [embed] });
+    await interaction.reply({ embeds: [embed] });
   }
 };

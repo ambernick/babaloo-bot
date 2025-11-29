@@ -1,39 +1,45 @@
+// src/commands/economy/daily.js
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const userService = require('../../services/userService');
 const config = require('../../config/config');
 
 module.exports = {
-  name: 'daily',
-  description: 'Claim your daily bonus (once per 24 hours)',
-  usage: '!daily',
-  category: 'economy',
-  
-  async execute(message, args) {
+  data: new SlashCommandBuilder()
+    .setName('daily')
+    .setDescription('Claim your daily bonus (once per 24 hours)'),
+    category: 'economy',
+
+  async execute(interaction) {
+    await interaction.deferReply();
+
     try {
-      // Get or create the user
       const dbResult = await userService.getOrCreateUser(
-        message.author.id,
-        message.author.username
+        interaction.user.id,
+        interaction.user.username
       );
 
       if (!dbResult.success || !dbResult.user) {
-        return message.reply('❌ Could not find or create your user account!');
+        return interaction.editReply({
+          content: '❌ Could not find or create your user account!',
+          ephemeral: true
+        });
       }
 
-      const dbUser = dbResult.user; // ✅ Extract the actual user
-
-      // Attempt to claim daily
-      const result = await userService.claimDaily(dbUser.id, message.author.username);
+      const dbUser = dbResult.user;
+      const result = await userService.claimDaily(dbUser.id, interaction.user.username);
 
       if (!result.success) {
-        return message.reply(`⏰ ${result.message}`);
+        return interaction.editReply({
+          content: `⏰ ${result.message}`,
+          ephemeral: true
+        });
       }
 
-      // Success!
-      const embed = {
-        color: config.colors.success,
-        title: '🎁 Daily Bonus Claimed!',
-        description: result.message,
-        fields: [
+      const embed = new EmbedBuilder()
+        .setColor(config.colors.success)
+        .setTitle('🎁 Daily Bonus Claimed!')
+        .setDescription(result.message)
+        .addFields(
           {
             name: 'Rewards',
             value: `🪙 **+${result.currency}** currency\n⭐ **+${result.xp}** XP`,
@@ -44,15 +50,17 @@ module.exports = {
             value: 'Daily bonuses reset every day. Don\'t miss out!',
             inline: false
           }
-        ],
-        thumbnail: { url: message.author.displayAvatarURL({ dynamic: true }) },
-        timestamp: new Date()
-      };
+        )
+        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+        .setTimestamp();
 
-      message.reply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embed] });
     } catch (error) {
       console.error('Error in daily command:', error);
-      message.reply('❌ Error claiming daily bonus. Please try again!');
+      await interaction.editReply({
+        content: '❌ Error claiming daily bonus. Please try again!',
+        ephemeral: true
+      });
     }
   }
 };

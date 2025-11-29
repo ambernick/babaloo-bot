@@ -16,7 +16,7 @@ module.exports = {
 
       try {
         Logger.command(interaction.user.tag, interaction.commandName);
-        await command.execute(interaction);
+        await command.execute(interaction, client);
       } catch (error) {
         Logger.error(`Error executing ${interaction.commandName}:`, error);
         
