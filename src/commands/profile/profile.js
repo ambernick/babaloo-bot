@@ -1,3 +1,4 @@
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const userService = require('../../services/userService');
 const xpService = require('../../services/xpService');
 const achievementService = require('../../services/achievementService');
@@ -5,35 +6,43 @@ const db = require('../../database/connection');
 const config = require('../../config/config');
 
 module.exports = {
-  name: 'profile',
-  aliases: ['me', 'prof'],
-  description: 'View detailed user profile',
-  usage: '!profile [@user]',
+  data: new SlashCommandBuilder()
+    .setName('profile')
+    .setDescription('View detailed user profile')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('The user to view (defaults to yourself)')
+        .setRequired(false)
+    ),
+
   category: 'profile',
-  
-  async execute(message, args, client) {
+
+  async execute(interaction, client) {
+    await interaction.deferReply();
+
     try {
-      const targetUser = message.mentions.users.first() || message.author;
-      
+      const targetUser = interaction.options.getUser('user') || interaction.user;
+
       const userResult = await userService.getOrCreateUser(
         targetUser.id,
         targetUser.username
       );
 
       if (!userResult.success) {
-        return message.reply('❌ User not found!');
+        return interaction.editReply('❌ User not found!');
       }
 
       const user = userResult.user;
 
-      // Get detailed stats
+      // Fetch extended stats
       const statsResult = await db.query(
         `SELECT 
           u.*,
-          COUNT(DISTINCT ua.id) FILTER (WHERE ua.completed_at IS NOT NULL) as achievements_completed,
-          COUNT(DISTINCT t.id) as total_transactions,
-          COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'earn'), 0) as total_earned,
-          COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'spend'), 0) as total_spent
+          COUNT(DISTINCT ua.id) FILTER (WHERE ua.completed_at IS NOT NULL) AS achievements_completed,
+          COUNT(DISTINCT t.id) AS total_transactions,
+          COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'earn'), 0) AS total_earned,
+          COALESCE(SUM(t.amount) FILTER (WHERE t.type = 'spend'), 0) AS total_spent
          FROM users u
          LEFT JOIN user_achievements ua ON u.id = ua.user_id
          LEFT JOIN transactions t ON u.id = t.user_id
@@ -44,73 +53,74 @@ module.exports = {
 
       const stats = statsResult.rows[0];
 
-      // Get rank
+      // Rank
       const rankResult = await db.query(
-        'SELECT COUNT(*) + 1 as rank FROM users WHERE xp > $1',
+        'SELECT COUNT(*) + 1 AS rank FROM users WHERE xp > $1',
         [stats.xp]
       );
       const rank = rankResult.rows[0].rank;
 
-      // Get level progress
+      // XP progress
       const progress = xpService.getLevelProgress(stats.xp, stats.level);
       const progressBar = createProgressBar(progress.progressPercent, 15);
 
-      // Calculate days as member
+      // Days since account created
       const daysSince = Math.floor(
         (Date.now() - new Date(stats.created_at)) / (1000 * 60 * 60 * 24)
       );
 
-      // Get total achievements
-      const achResult = await db.query('SELECT COUNT(*) as total FROM achievements');
+      // Total achievements
+      const achResult = await db.query('SELECT COUNT(*) AS total FROM achievements');
       const totalAchievements = achResult.rows[0].total;
 
-      const embed = {
-        color: config.colors.primary,
-        title: `👤 ${targetUser.username}'s Profile`,
-        thumbnail: { url: targetUser.displayAvatarURL({ dynamic: true }) },
-        fields: [
+      const embed = new EmbedBuilder()
+        .setColor(config.colors.primary)
+        .setTitle(`👤 ${targetUser.username}'s Profile`)
+        .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+        .addFields(
           {
             name: '💰 Wealth',
-            value: `🪙 ${stats.currency.toLocaleString()} coins\n💎 ${stats.premium_currency} gems`,
+            value: `🪙 **${stats.currency.toLocaleString()}** coins\n💎 **${stats.premium_currency}** gems`,
             inline: true
           },
           {
             name: '⭐ Level & Rank',
-            value: `Level ${stats.level}\nRank #${rank}`,
+            value: `Level **${stats.level}**\nRank **#${rank}**`,
             inline: true
           },
           {
             name: '🏆 Achievements',
-            value: `${stats.achievements_completed} / ${totalAchievements}\n(${Math.round((stats.achievements_completed / totalAchievements) * 100)}%)`,
+            value: `${stats.achievements_completed} / ${totalAchievements} (${Math.round((stats.achievements_completed / totalAchievements) * 100)}%)`,
             inline: true
           },
           {
-            name: 'XP Progress',
+            name: '📈 XP Progress',
             value: `${progressBar}\n${progress.xpProgress.toLocaleString()} / ${progress.xpNeeded.toLocaleString()} XP (${progress.progressPercent}%)`,
             inline: false
           },
           {
             name: '📊 Statistics',
-            value: 
-              `📅 Member for ${daysSince} days\n` +
-              `💸 ${stats.total_transactions} transactions\n` +
-              `📈 ${stats.total_earned.toLocaleString()} total earned\n` +
-              `📉 ${stats.total_spent.toLocaleString()} total spent`,
+            value:
+              `📅 Member for **${daysSince}** days\n` +
+              `💸 **${stats.total_transactions}** transactions\n` +
+              `📈 **${stats.total_earned.toLocaleString()}** earned\n` +
+              `📉 **${stats.total_spent.toLocaleString()}** spent`,
             inline: false
           }
-        ],
-        footer: { text: 'Use !achievements to see your unlocked achievements' },
-        timestamp: new Date()
-      };
+        )
+        .setFooter({ text: 'Use /🏆achievements to view your achievements' })
+        .setTimestamp();
 
-      message.reply({ embeds: [embed] });
+      return interaction.editReply({ embeds: [embed] });
+
     } catch (error) {
       console.error('Error in profile command:', error);
-      message.reply('❌ Error loading profile!');
+      return interaction.editReply('❌ Error loading profile!');
     }
   }
 };
 
+// Progress bar generator
 function createProgressBar(percent, length = 10) {
   const filled = Math.round((percent / 100) * length);
   const empty = length - filled;
