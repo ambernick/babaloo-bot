@@ -4,8 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const Logger = require('./src/utils/logger');
 const chatTracker = require('./src/services/chatTracker');
-const levelUp = require('./src/events/levelUp')
+const levelUp = require('./src/events/levelUp');
 const achievementService = require('./src/config/achievements');
+const { startDashboard } = require('./src/dashboard/server');
 
 // Create Discord client
 const client = new Client({
@@ -32,10 +33,7 @@ function loadCommands() {
     
     for (const file of commandFiles) {
       const command = require(path.join(commandPath, file));
-      
-      // Support both slash commands (data.name) and old commands (name)
       const commandName = command.data ? command.data.name : command.name;
-      
       if (commandName) {
         client.commands.set(commandName, command);
         Logger.success(`Loaded command: ${commandName} (${folder})`);
@@ -47,7 +45,6 @@ function loadCommands() {
   
   Logger.info(`Total commands loaded: ${client.commands.size}`);
 }
-
 
 // Load all events
 function loadEvents() {
@@ -78,6 +75,20 @@ loadEvents();
 client.login(process.env.DISCORD_TOKEN).catch(err => {
   Logger.error('Failed to login:', err);
   process.exit(1);
+});
+
+// Replace 'ready' with 'clientReady'
+client.once('clientReady', () => {
+  Logger.success(`Logged in as ${client.user.tag}`);
+
+  // Start dashboard server if port is set
+  if (process.env.DASHBOARD_PORT) {
+    try {
+      startDashboard(client);
+    } catch (error) {
+      Logger.warn('Dashboard not available. Install dependencies: npm install express express-session passport passport-discord ejs');
+    }
+  }
 });
 
 // Graceful shutdown
