@@ -1,31 +1,39 @@
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const achievementService = require('../../services/achievementService');
 const config = require('../../config/config');
 const userService = require('../../services/userService');
 
 module.exports = {
-  name: 'achievements',
-  aliases: ['ach', 'achieve'],
-  description: 'View your achievements',
-  usage: '!achievements [@user]',
+  data: new SlashCommandBuilder()
+    .setName('achievements')
+    .setDescription('View your achievements')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('The user to check (defaults to yourself)')
+        .setRequired(false)
+    ),
   category: 'profile',
-  
-  async execute(message, args, client) {
+
+  async execute(interaction, client) {
+    await interaction.deferReply(); // defer immediately
+
     try {
-      const targetUser = message.mentions.users.first() || message.author;
-      
+      const targetUser = interaction.options.getUser('user') || interaction.user;
+
       const userResult = await userService.getOrCreateUser(
         targetUser.id,
         targetUser.username
       );
 
       if (!userResult.success) {
-        return message.reply('❌ User not found!');
+        return await interaction.editReply('❌ User not found!');
       }
 
       const achResult = await achievementService.getUserAchievements(userResult.user.id);
 
       if (!achResult.success) {
-        return message.reply('❌ Error loading achievements!');
+        return await interaction.editReply('❌ Error loading achievements!');
       }
 
       const achievements = achResult.achievements;
@@ -47,7 +55,7 @@ module.exports = {
 
       // Create fields for each category
       const fields = [];
-      
+
       for (const [category, achs] of Object.entries(categories)) {
         if (achs.completed.length > 0) {
           fields.push({
@@ -58,7 +66,7 @@ module.exports = {
             inline: false
           });
         }
-        
+
         if (achs.inProgress.length > 0 && fields.length < 10) { // Discord embed limit
           fields.push({
             name: `${getCategoryEmoji(category)} ${capitalize(category)} (Available)`,
@@ -71,26 +79,27 @@ module.exports = {
         }
       }
 
-      const embed = {
-        color: config.colors.primary,
-        title: `🏆 ${targetUser.username}'s Achievements`,
-        description: `**${completed.length}** / **${achievements.length}** completed`,
-        thumbnail: { url: targetUser.displayAvatarURL({ dynamic: true }) },
-        fields: fields.slice(0, 10), // Discord limit
-        footer: { 
+      const embed = new EmbedBuilder()
+        .setColor(config.colors.primary)
+        .setTitle(`🏆 ${targetUser.username}'s Achievements`)
+        .setDescription(`**${completed.length}** / **${achievements.length}** completed`)
+        .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+        .addFields(fields.slice(0, 10)) // Discord limit
+        .setFooter({ 
           text: `Keep chatting and completing tasks to unlock more achievements!` 
-        },
-        timestamp: new Date()
-      };
+        })
+        .setTimestamp();
 
-      message.reply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embed] });
+
     } catch (error) {
       console.error('Error in achievements command:', error);
-      message.reply('❌ Error loading achievements!');
+      await interaction.editReply('❌ Error loading achievements!');
     }
   }
 };
 
+// Helper functions
 function getCategoryEmoji(category) {
   const emojis = {
     starter: '🎯',
