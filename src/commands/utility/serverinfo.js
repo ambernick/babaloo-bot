@@ -1,21 +1,23 @@
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const config = require('../../config/config');
 
 module.exports = {
-  name: 'serverinfo',
-  description: 'Display information about the current server',
-  usage: '!serverinfo',
+  data: new SlashCommandBuilder()
+    .setName('serverinfo')
+    .setDescription('Display information about the current server'),
+
   category: 'utility',
-  
-  async execute(message, args, client) {
-    const guild = message.guild;
-    
-    const embed = {
-      color: config.colors.info,
-      title: `📊 ${guild.name} Server Info`,
-      thumbnail: {
-        url: guild.iconURL({ dynamic: true })
-      },
-      fields: [
+
+  async execute(interaction, client) {
+    await interaction.deferReply();
+
+    const guild = interaction.guild;
+
+    const embed = new EmbedBuilder()
+      .setColor(config.colors.info)
+      .setTitle(`📊 ${guild.name} Server Info`)
+      .setThumbnail(guild.iconURL({ dynamic: true }))
+      .addFields(
         {
           name: '👥 Members',
           value: guild.memberCount.toString(),
@@ -46,10 +48,9 @@ module.exports = {
           value: guild.roles.cache.size.toString(),
           inline: true
         }
-      ],
-      timestamp: new Date()
-    };
-    
-    message.reply({ embeds: [embed] });
+      )
+      .setTimestamp();
+
+    return interaction.editReply({ embeds: [embed] });
   }
 };
