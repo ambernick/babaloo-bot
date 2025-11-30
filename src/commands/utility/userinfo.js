@@ -1,23 +1,37 @@
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const config = require('../../config/config');
 
 module.exports = {
-  name: 'userinfo',
-  description: 'Display information about a user',
-  usage: '!userinfo [@user]',
+  data: new SlashCommandBuilder()
+    .setName('userinfo')
+    .setDescription('Display information about a user')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('The user to view (defaults to yourself)')
+        .setRequired(false)
+    ),
+
   category: 'utility',
-  
-  async execute(message, args, client) {
-    // Get mentioned user or default to message author
-    const user = message.mentions.users.first() || message.author;
-    const member = message.guild.members.cache.get(user.id);
-    
-    const embed = {
-      color: config.colors.info,
-      title: `👤 ${user.tag}`,
-      thumbnail: {
-        url: user.displayAvatarURL({ dynamic: true })
-      },
-      fields: [
+
+  async execute(interaction, client) {
+    await interaction.deferReply();
+
+    // Get user or fallback to the person using the command
+    const user = interaction.options.getUser('user') || interaction.user;
+    const member = await interaction.guild.members.fetch(user.id);
+
+    const roles = member.roles.cache
+      .filter(role => role.id !== interaction.guild.id) // remove @everyone
+      .map(role => role.name)
+      .slice(0, 10)
+      .join(', ') || 'None';
+
+    const embed = new EmbedBuilder()
+      .setColor(config.colors.info)
+      .setTitle(`👤 ${user.tag}`)
+      .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+      .addFields(
         {
           name: '🆔 User ID',
           value: user.id,
@@ -35,17 +49,12 @@ module.exports = {
         },
         {
           name: '🎭 Roles',
-          value: member.roles.cache
-            .filter(role => role.name !== '@everyone')
-            .map(role => role.name)
-            .slice(0, 5)
-            .join(', ') || 'None',
+          value: roles,
           inline: false
         }
-      ],
-      timestamp: new Date()
-    };
-    
-    message.reply({ embeds: [embed] });
+      )
+      .setTimestamp();
+
+    interaction.editReply({ embeds: [embed] });
   }
 };
