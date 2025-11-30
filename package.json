@@ -1,19 +1,29 @@
 {
   "name": "babaloo-bot",
-  "version": "1.0.0",
-  "description": "economy and workflow bot",
+  "version": "2.0.0",
+  "description": "Multi-platform economy bot with web dashboard",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "deploy": "node src/deploy-commands.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "deploy": "node src/deploy-commands.js",
+    "init-db": "node src/database/init.js",
+    "dashboard": "node src/dashboard/server.js"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ambernick/babaloo-bot.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "discord",
+    "bot",
+    "economy",
+    "dashboard",
+    "gamification"
+  ],
+  "author": "falsettovibrato",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/ambernick/babaloo-bot/issues"
   },
@@ -21,6 +31,11 @@
   "dependencies": {
     "discord.js": "^14.24.2",
     "dotenv": "^17.2.3",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "express-session": "^1.18.2",
+    "passport": "^0.7.0",
+    "passport-discord": "^0.1.4",
     "pg": "^8.16.3"
   }
 }
