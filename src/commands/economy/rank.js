@@ -1,26 +1,34 @@
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const userService = require('../../services/userService');
 const xpService = require('../../services/xpService');
 const db = require('../../database/connection');
 const config = require('../../config/config');
 
 module.exports = {
-  name: 'rank',
-  aliases: ['level', 'xp'],
-  description: 'Check your level and rank',
-  usage: '!rank [@user]',
+  data: new SlashCommandBuilder()
+    .setName('rank')
+    .setDescription('Check your level and rank')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('The user to check (defaults to yourself)')
+        .setRequired(false)
+    ),
   category: 'economy',
-  
-  async execute(message, args, client) {
+
+  async execute(interaction, client) {
+    await interaction.deferReply(); // defer immediately
+
     try {
-      const targetUser = message.mentions.users.first() || message.author;
-      
+      const targetUser = interaction.options.getUser('user') || interaction.user;
+
       const userResult = await userService.getOrCreateUser(
         targetUser.id,
         targetUser.username
       );
 
       if (!userResult.success) {
-        return message.reply('❌ User not found!');
+        return interaction.editReply('❌ User not found!');
       }
 
       const user = userResult.user;
@@ -47,12 +55,13 @@ module.exports = {
       const emptyBars = barLength - filledBars;
       const progressBar = '█'.repeat(filledBars) + '░'.repeat(emptyBars);
 
-      const embed = {
-        color: config.colors.info,
-        title: `⭐ ${targetUser.username}'s Rank`,
-        thumbnail: { url: targetUser.displayAvatarURL({ dynamic: true }) },
-        description: `**Rank #${rank}** out of ${totalUsers} users`,
-        fields: [
+      // Build embed
+      const embed = new EmbedBuilder()
+        .setColor(config.colors.info)
+        .setTitle(`⭐ ${targetUser.username}'s Rank`)
+        .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+        .setDescription(`**Rank #${rank}** out of ${totalUsers} users`)
+        .addFields(
           {
             name: `Level ${user.level}`,
             value: `Total XP: **${user.xp.toLocaleString()}**`,
@@ -68,14 +77,14 @@ module.exports = {
             value: 'Chat in Discord • Complete achievements • Claim daily bonus',
             inline: false
           }
-        ],
-        timestamp: new Date()
-      };
+        )
+        .setTimestamp();
 
-      message.reply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embed] });
+
     } catch (error) {
       console.error('Error in rank command:', error);
-      message.reply('❌ Error fetching rank. Please try again!');
+      await interaction.editReply('❌ Error fetching rank. Please try again!');
     }
   }
 };
