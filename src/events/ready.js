@@ -15,8 +15,11 @@ module.exports = {
     
     // Set bot activity status
     client.user.setPresence({
-      activities: [{ name: '/help for commands', type: 3 }], // Type 3 = "Watching"
-      status: 'online'
+      activities: [{
+        name: process.env.BOT_STATUS || '/help for commands', // default fallback
+        type: process.env.BOT_ACTIVITY_TYPE ? parseInt(process.env.BOT_ACTIVITY_TYPE) : 3 // default: Watching
+      }],
+      status: process.env.BOT_ONLINE_STATUS || 'online' // default: online
     });
   }
 };
