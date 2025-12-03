@@ -15,7 +15,7 @@ module.exports = {
     
     // Set bot activity status
     client.user.setPresence({
-      activities: [{ name: '!help for commands', type: 3 }], // Type 3 = "Watching"
+      activities: [{ name: '/help for commands', type: 3 }], // Type 3 = "Watching"
       status: 'online'
     });
   }
