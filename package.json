@@ -6,9 +6,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
+    "start:dev": "node -r dotenv/config index.js dotenv_config_path=.env.dev",
     "dev": "nodemon index.js",
     "deploy": "node src/deploy-commands.js",
+    "deploy:dev": "node -r dotenv/config src/deploy-commands.js dotenv_config_path=.env.dev",
     "init-db": "node src/database/init.js",
+    "init:dev": "node -r dotenv/config src/database/init.js dotenv_config_path=.env.dev",
     "dashboard": "node src/dashboard/server.js"
   },
   "repository": {
