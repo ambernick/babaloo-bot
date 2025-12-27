@@ -105,7 +105,7 @@ client.once('clientReady', async () => {
 
   // Initialize Twitch bot
   try {
-    const twitchConnected = await twitchBot.initialize();
+    const twitchConnected = await twitchBot.initialize(client);
     if (twitchConnected) {
       Logger.success('Twitch bot integration enabled');
     }

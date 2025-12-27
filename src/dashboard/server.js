@@ -119,10 +119,118 @@ app.get('/admin', ensureAuthenticated, ensureAdmin, (req, res) => {
 const apiRouter = require('./routes/api');
 app.use('/api', ensureAuthenticated, apiRouter);
 
+// Twitch OAuth routes for account linking
+app.get('/auth/twitch/callback', async (req, res) => {
+  const { code, state } = req.query;
+
+  if (!code || !state) {
+    return res.status(400).send('Missing code or state parameter');
+  }
+
+  try {
+    // Exchange code for access token
+    const tokenResponse = await fetch('https://id.twitch.tv/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.TWITCH_CLIENT_ID,
+        client_secret: process.env.TWITCH_CLIENT_SECRET,
+        code: code,
+        grant_type: 'authorization_code',
+        redirect_uri: process.env.TWITCH_OAUTH_CALLBACK_URL
+      })
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenData.access_token) {
+      Logger.error('Failed to get Twitch access token:', tokenData);
+      return res.status(500).send('Failed to authenticate with Twitch');
+    }
+
+    // Get Twitch user info
+    const userResponse = await fetch('https://api.twitch.tv/helix/users', {
+      headers: {
+        'Authorization': `Bearer ${tokenData.access_token}`,
+        'Client-Id': process.env.TWITCH_CLIENT_ID
+      }
+    });
+
+    const userData = await userResponse.json();
+
+    if (!userData.data || userData.data.length === 0) {
+      return res.status(500).send('Failed to get Twitch user data');
+    }
+
+    const twitchUser = userData.data[0];
+    const twitchId = twitchUser.id;
+    const twitchUsername = twitchUser.login;
+
+    // State contains the Discord user ID
+    const discordUserId = state;
+
+    // Link the accounts
+    const userService = require('../services/userService');
+    const linkResult = await userService.linkTwitchAccount(
+      parseInt(discordUserId),
+      twitchId,
+      twitchUsername
+    );
+
+    if (linkResult.success) {
+      if (linkResult.merged) {
+        res.send(`
+          <html>
+            <head><title>Account Linked!</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1>✅ Accounts Linked Successfully!</h1>
+              <p>Your Twitch account <strong>${twitchUsername}</strong> has been linked to your Discord account.</p>
+              <p>Your Twitch progress has been merged:</p>
+              <ul style="list-style: none;">
+                <li>💰 +${linkResult.currencyAdded} coins</li>
+                <li>⭐ +${linkResult.xpAdded} XP</li>
+                <li>🎯 New Level: ${linkResult.newLevel}</li>
+              </ul>
+              <p>You can close this window and return to Discord.</p>
+            </body>
+          </html>
+        `);
+      } else {
+        res.send(`
+          <html>
+            <head><title>Account Linked!</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1>✅ Accounts Linked Successfully!</h1>
+              <p>Your Twitch account <strong>${twitchUsername}</strong> has been linked to your Discord account.</p>
+              <p>Your progress will now sync across both platforms!</p>
+              <p>You can close this window and return to Discord.</p>
+            </body>
+          </html>
+        `);
+      }
+      Logger.success(`Linked Twitch account ${twitchUsername} to Discord user ID ${discordUserId}`);
+    } else {
+      res.status(400).send(`
+        <html>
+          <head><title>Link Failed</title></head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+            <h1>❌ Failed to Link Accounts</h1>
+            <p>Error: ${linkResult.error}</p>
+            <p>You can close this window and try again.</p>
+          </body>
+        </html>
+      `);
+    }
+  } catch (error) {
+    Logger.error('Error in Twitch OAuth callback:', error);
+    res.status(500).send('An error occurred while linking your account');
+  }
+});
+
 // Start server
 function startDashboard(client) {
   app.locals.client = client; // Make Discord client accessible in routes
-  
+
   app.listen(PORT, () => {
     Logger.success(`Dashboard server running on http://localhost:${PORT}`);
   });

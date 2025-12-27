@@ -10,9 +10,13 @@ class TwitchBot {
     this.lastMessageTime = new Map(); // userId -> timestamp
     this.messagesThisHour = new Map(); // userId-hour -> count
     this.isConnected = false;
+    this.discordClient = null; // Will be set during initialization for manual linking
   }
 
-  async initialize() {
+  async initialize(discordClient) {
+    // Store Discord client for auto-linking
+    this.discordClient = discordClient;
+
     // Skip if Twitch credentials not provided
     if (!process.env.TWITCH_BOT_USERNAME || !process.env.TWITCH_OAUTH_TOKEN) {
       Logger.info('Twitch bot credentials not configured, skipping Twitch integration');
@@ -70,8 +74,11 @@ class TwitchBot {
       // Ignore bot's own messages
       if (self) return;
 
-      // Ignore commands (messages starting with !)
-      if (message.startsWith('!')) return;
+      // Handle commands (messages starting with !)
+      if (message.startsWith('!')) {
+        await this.handleCommand(channel, tags, message);
+        return;
+      }
 
       await this.handleMessage(channel, tags, message);
     });
@@ -80,12 +87,59 @@ class TwitchBot {
     setInterval(() => this.cleanupTracking(), 3600000); // Every hour
   }
 
-  async handleMessage(channel, tags, message) {
+  async handleCommand(channel, tags, message) {
+    const twitchUserId = tags['user-id'];
+    const username = tags['display-name'] || tags['username'];
+    const parts = message.trim().split(' ');
+    const command = parts[0].toLowerCase();
+
+    try {
+      switch (command) {
+        case '!balance':
+          await this.handleBalanceCommand(channel, twitchUserId, username);
+          break;
+        // Add more commands here in the future
+        default:
+          // Ignore unknown commands
+          break;
+      }
+    } catch (error) {
+      Logger.error(`Error handling Twitch command ${command} from ${username}:`, error);
+    }
+  }
+
+  async handleBalanceCommand(channel, twitchUserId, username) {
+    try {
+      // Get or create user
+      const userResult = await userService.getOrCreateUserByTwitch(twitchUserId, username);
+
+      if (!userResult.success) {
+        this.client.say(channel, `@${username} - Error fetching your balance. Please try again.`);
+        return;
+      }
+
+      const user = userResult.user;
+      const xpForNext = userService.xpForNextLevel(user.level);
+      const xpProgress = user.xp - (user.level - 1) ** 2 * 100;
+
+      const balanceMessage = `@${username} - Balance: ${user.currency} coins | Level ${user.level} (${xpProgress}/${xpForNext} XP)`;
+      this.client.say(channel, balanceMessage);
+      Logger.info(`Twitch balance command used by ${username}`);
+    } catch (error) {
+      Logger.error(`Error in handleBalanceCommand for ${username}:`, error);
+      this.client.say(channel, `@${username} - Error fetching your balance. Please try again.`);
+    }
+  }
+
+  async handleMessage(channel, tags) {
     const twitchUserId = tags['user-id'];
     const username = tags['display-name'] || tags['username'];
     const now = Date.now();
 
     try {
+      // Auto-linking is not supported via bot API
+      // Users must use /link-twitch command to manually link accounts
+
       // Get or create user by Twitch ID
       const userResult = await userService.getOrCreateUserByTwitch(twitchUserId, username);
 

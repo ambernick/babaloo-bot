@@ -96,7 +96,7 @@ class UserService {
   // Get or create user by Twitch ID
   async getOrCreateUserByTwitch(twitchId, username) {
     try {
-      // Check if user exists
+      // Check if user exists with this Twitch ID (could be Discord account or Twitch-only)
       let result = await db.query(
         'SELECT * FROM users WHERE twitch_id = $1',
         [twitchId]
@@ -106,7 +106,7 @@ class UserService {
         return { success: true, user: result.rows[0], isNew: false };
       }
 
-      // Create new user with Twitch ID
+      // Create new Twitch-only user
       result = await db.query(
         `INSERT INTO users (twitch_id, username, currency, xp, level)
          VALUES ($1, $2, 0, 0, 1)
@@ -187,6 +187,109 @@ class UserService {
   // Calculate XP needed for next level
   xpForNextLevel(currentLevel) {
     return (currentLevel ** 2) * 100;
+  }
+
+  // Link Twitch account to Discord account (merge accounts)
+  async linkTwitchAccount(discordUserId, twitchId, twitchUsername) {
+    try {
+      // Get the Discord user
+      const discordUserResult = await db.query(
+        'SELECT * FROM users WHERE id = $1',
+        [discordUserId]
+      );
+
+      if (discordUserResult.rows.length === 0) {
+        return { success: false, error: 'Discord user not found' };
+      }
+
+      const discordUser = discordUserResult.rows[0];
+
+      // Check if Discord account already linked
+      if (discordUser.twitch_id) {
+        return { success: false, error: 'Discord account already linked to Twitch' };
+      }
+
+      // Check if Twitch account exists
+      const twitchUserResult = await db.query(
+        'SELECT * FROM users WHERE twitch_id = $1',
+        [twitchId]
+      );
+
+      if (twitchUserResult.rows.length > 0) {
+        // Twitch account exists - merge it into Discord account
+        const twitchUser = twitchUserResult.rows[0];
+
+        // Start transaction
+        await db.query('BEGIN');
+
+        try {
+          // Update user_achievements to point to Discord account FIRST
+          await db.query(
+            'UPDATE user_achievements SET user_id = $1 WHERE user_id = $2',
+            [discordUserId, twitchUser.id]
+          );
+
+          // Update transactions to point to Discord account
+          await db.query(
+            'UPDATE transactions SET user_id = $1 WHERE user_id = $2',
+            [discordUserId, twitchUser.id]
+          );
+
+          // Delete old Twitch-only account BEFORE updating Discord account
+          await db.query('DELETE FROM user_profiles WHERE user_id = $1', [twitchUser.id]);
+          await db.query('DELETE FROM users WHERE id = $1', [twitchUser.id]);
+
+          // Now add Twitch data to Discord account (combine stats)
+          await db.query(
+            `UPDATE users
+             SET twitch_id = $1,
+                 currency = currency + $2,
+                 xp = xp + $3,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $4`,
+            [twitchId, twitchUser.currency, twitchUser.xp, discordUserId]
+          );
+
+          // Recalculate level based on combined XP
+          const updatedUser = await db.query(
+            'SELECT * FROM users WHERE id = $1',
+            [discordUserId]
+          );
+          const newLevel = this.calculateLevel(updatedUser.rows[0].xp);
+
+          await db.query(
+            'UPDATE users SET level = $1 WHERE id = $2',
+            [newLevel, discordUserId]
+          );
+
+          await db.query('COMMIT');
+
+          console.log(`✅ Merged Twitch account ${twitchUsername} into Discord account ${discordUser.username}`);
+          return {
+            success: true,
+            merged: true,
+            currencyAdded: twitchUser.currency,
+            xpAdded: twitchUser.xp,
+            newLevel
+          };
+        } catch (error) {
+          await db.query('ROLLBACK');
+          throw error;
+        }
+      } else {
+        // No existing Twitch account - just link the ID
+        await db.query(
+          'UPDATE users SET twitch_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [twitchId, discordUserId]
+        );
+
+        console.log(`✅ Linked Twitch account ${twitchUsername} to Discord account ${discordUser.username}`);
+        return { success: true, merged: false };
+      }
+    } catch (error) {
+      console.error('Error linking Twitch account:', error);
+      return { success: false, error: error.message };
+    }
   }
    // Get user balance
    async getBalance(discordId) {
