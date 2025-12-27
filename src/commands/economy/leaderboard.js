@@ -35,8 +35,15 @@ module.exports = {
       const perPage = 10;
       const offset = (page - 1) * perPage;
 
-      // Exclude admin from leaderboards
+      // Exclude admin from leaderboards (except in development with few users)
       const adminId = process.env.ADMIN_USER_ID;
+
+      // Check total user count first
+      const totalCountResult = await db.query('SELECT COUNT(*) as total FROM users');
+      const totalAllUsers = parseInt(totalCountResult.rows[0].total);
+
+      // Include admin if there are 3 or fewer users (development/testing mode)
+      const includeAdmin = totalAllUsers <= 3;
 
       let query;
       let countQuery;
@@ -44,16 +51,20 @@ module.exports = {
       let icon;
       let formatValue;
 
+      // Build WHERE clause based on whether to include admin
+      const whereClause = includeAdmin ? '' : 'WHERE discord_id != $1';
+      const params = includeAdmin ? [] : [adminId];
+
       switch (category) {
         case 'currency':
           query = `
             SELECT discord_id, username, currency
             FROM users
-            WHERE discord_id != $1
+            ${whereClause}
             ORDER BY currency DESC
-            LIMIT $2 OFFSET $3
+            LIMIT $${params.length + 1} OFFSET $${params.length + 2}
           `;
-          countQuery = `SELECT COUNT(*) as total FROM users WHERE discord_id != $1`;
+          countQuery = `SELECT COUNT(*) as total FROM users ${whereClause}`;
           title = '🪙 Currency Leaderboard';
           icon = '🪙';
           formatValue = (user) => `${user.currency.toLocaleString()} coins`;
@@ -63,27 +74,28 @@ module.exports = {
           query = `
             SELECT discord_id, username, xp, level
             FROM users
-            WHERE discord_id != $1
+            ${whereClause}
             ORDER BY xp DESC
-            LIMIT $2 OFFSET $3
+            LIMIT $${params.length + 1} OFFSET $${params.length + 2}
           `;
-          countQuery = `SELECT COUNT(*) as total FROM users WHERE discord_id != $1`;
+          countQuery = `SELECT COUNT(*) as total FROM users ${whereClause}`;
           title = '⭐ XP & Level Leaderboard';
           icon = '⭐';
           formatValue = (user) => `Level ${user.level} • ${user.xp.toLocaleString()} XP`;
           break;
 
         case 'achievements':
+          const achievementWhere = includeAdmin ? '' : 'WHERE u.discord_id != $1';
           query = `
             SELECT u.discord_id, u.username, COUNT(ua.id) as achievement_count
             FROM users u
             LEFT JOIN user_achievements ua ON u.id = ua.user_id AND ua.completed_at IS NOT NULL
-            WHERE u.discord_id != $1
+            ${achievementWhere}
             GROUP BY u.id, u.discord_id, u.username
             ORDER BY achievement_count DESC
-            LIMIT $2 OFFSET $3
+            LIMIT $${params.length + 1} OFFSET $${params.length + 2}
           `;
-          countQuery = `SELECT COUNT(*) as total FROM users WHERE discord_id != $1`;
+          countQuery = `SELECT COUNT(*) as total FROM users ${whereClause}`;
           title = '🏆 Achievement Leaderboard';
           icon = '🏆';
           formatValue = (user) => `${user.achievement_count} achievement${user.achievement_count !== 1 ? 's' : ''}`;
@@ -94,8 +106,9 @@ module.exports = {
       }
 
       // Get leaderboard data
-      const result = await db.query(query, [adminId, perPage, offset]);
-      const countResult = await db.query(countQuery, [adminId]);
+      const queryParams = [...params, perPage, offset];
+      const result = await db.query(query, queryParams);
+      const countResult = await db.query(countQuery, params);
       const totalUsers = parseInt(countResult.rows[0].total);
       const totalPages = Math.ceil(totalUsers / perPage);
 
@@ -105,13 +118,16 @@ module.exports = {
 
       // Find current user's rank
       let userRankQuery;
+      const rankWhereClause = includeAdmin ? '' : 'AND discord_id != $2';
+      const rankParams = includeAdmin ? [interaction.user.id] : [interaction.user.id, adminId];
+
       switch (category) {
         case 'currency':
           userRankQuery = `
             SELECT COUNT(*) + 1 as rank
             FROM users
             WHERE currency > (SELECT currency FROM users WHERE discord_id = $1)
-            AND discord_id != $2
+            ${rankWhereClause}
           `;
           break;
         case 'xp':
@@ -119,10 +135,11 @@ module.exports = {
             SELECT COUNT(*) + 1 as rank
             FROM users
             WHERE xp > (SELECT xp FROM users WHERE discord_id = $1)
-            AND discord_id != $2
+            ${rankWhereClause}
           `;
           break;
         case 'achievements':
+          const achRankWhere = includeAdmin ? '' : 'WHERE u.discord_id != $2';
           userRankQuery = `
             WITH user_achievements_count AS (
               SELECT u.id, COUNT(ua.id) as count
@@ -135,7 +152,7 @@ module.exports = {
               SELECT u.id, COUNT(ua.id) as count
               FROM users u
               LEFT JOIN user_achievements ua ON u.id = ua.user_id AND ua.completed_at IS NOT NULL
-              WHERE u.discord_id != $2
+              ${achRankWhere}
               GROUP BY u.id
             )
             SELECT COUNT(*) + 1 as rank
@@ -145,7 +162,7 @@ module.exports = {
           break;
       }
 
-      const userRankResult = await db.query(userRankQuery, [interaction.user.id, adminId]);
+      const userRankResult = await db.query(userRankQuery, rankParams);
       const userRank = userRankResult.rows[0]?.rank || 'Unranked';
 
       // Build leaderboard text
