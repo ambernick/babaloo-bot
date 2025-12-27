@@ -93,6 +93,41 @@ class UserService {
     }
   }
 
+  // Get or create user by Twitch ID
+  async getOrCreateUserByTwitch(twitchId, username) {
+    try {
+      // Check if user exists
+      let result = await db.query(
+        'SELECT * FROM users WHERE twitch_id = $1',
+        [twitchId]
+      );
+
+      if (result.rows.length > 0) {
+        return { success: true, user: result.rows[0], isNew: false };
+      }
+
+      // Create new user with Twitch ID
+      result = await db.query(
+        `INSERT INTO users (twitch_id, username, currency, xp, level)
+         VALUES ($1, $2, 0, 0, 1)
+         RETURNING *`,
+        [twitchId, username]
+      );
+
+      // Create user profile
+      await db.query(
+        'INSERT INTO user_profiles (user_id) VALUES ($1)',
+        [result.rows[0].id]
+      );
+
+      console.log(`✅ New Twitch user registered: ${username}`);
+      return { success: true, user: result.rows[0], isNew: true };
+    } catch (error) {
+      console.error('Error in getOrCreateUserByTwitch:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // Get user by Discord ID
   async getUser(discordId) {
     try {
@@ -100,11 +135,11 @@ class UserService {
         'SELECT * FROM users WHERE discord_id = $1',
         [discordId]
       );
-      
+
       if (result.rows.length === 0) {
         return { success: false, error: 'User not found' };
       }
-      
+
       return { success: true, user: result.rows[0] };
     } catch (error) {
       console.error('Error in getUser:', error);

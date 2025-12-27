@@ -8,6 +8,7 @@ const levelUp = require('./src/events/levelUp');
 const achievementService = require('./src/config/achievements');
 const { startDashboard } = require('./src/dashboard/server');
 const { testConnection } = require('./src/database/connection');
+const twitchBot = require('./src/services/twitchBot');
 
 // Create Discord client
 const client = new Client({
@@ -99,8 +100,18 @@ async function startBot() {
 startBot();
 
 // Replace 'ready' with 'clientReady'
-client.once('clientReady', () => {
+client.once('clientReady', async () => {
   Logger.success(`Logged in as ${client.user.tag}`);
+
+  // Initialize Twitch bot
+  try {
+    const twitchConnected = await twitchBot.initialize();
+    if (twitchConnected) {
+      Logger.success('Twitch bot integration enabled');
+    }
+  } catch (error) {
+    Logger.error('Error initializing Twitch bot:', error);
+  }
 
   // Start dashboard server if port is set
   if (process.env.DASHBOARD_PORT) {
@@ -113,8 +124,9 @@ client.once('clientReady', () => {
 });
 
 // Graceful shutdown
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   Logger.info('👋 Shutting down gracefully...');
+  await twitchBot.disconnect();
   client.destroy();
   process.exit(0);
 });
