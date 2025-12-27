@@ -7,6 +7,7 @@ const chatTracker = require('./src/services/chatTracker');
 const levelUp = require('./src/events/levelUp');
 const achievementService = require('./src/config/achievements');
 const { startDashboard } = require('./src/dashboard/server');
+const { testConnection } = require('./src/database/connection');
 
 // Create Discord client
 const client = new Client({
@@ -67,15 +68,35 @@ function loadEvents() {
 }
 
 // Initialize bot
-Logger.info('🚀 Starting Babaloo Bot...');
-loadCommands();
-loadEvents();
+async function startBot() {
+  Logger.info('🚀 Starting Babaloo Bot...');
 
-// Login to Discord
-client.login(process.env.DISCORD_TOKEN).catch(err => {
-  Logger.error('Failed to login:', err);
-  process.exit(1);
-});
+  // Test database connection first
+  Logger.info('Testing database connection...');
+  const dbConnected = await testConnection();
+
+  if (!dbConnected) {
+    Logger.error('Failed to connect to database. Bot will still start but database features may not work.');
+    Logger.info('Retrying in 5 seconds...');
+    setTimeout(async () => {
+      const retryConnected = await testConnection();
+      if (retryConnected) {
+        Logger.success('Database connection established on retry!');
+      }
+    }, 5000);
+  }
+
+  loadCommands();
+  loadEvents();
+
+  // Login to Discord
+  client.login(process.env.DISCORD_TOKEN).catch(err => {
+    Logger.error('Failed to login:', err);
+    process.exit(1);
+  });
+}
+
+startBot();
 
 // Replace 'ready' with 'clientReady'
 client.once('clientReady', () => {
