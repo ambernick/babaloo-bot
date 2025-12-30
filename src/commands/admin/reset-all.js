@@ -33,9 +33,10 @@ module.exports = {
           '• All achievements\n' +
           '• All transaction history\n' +
           '• All daily streaks\n\n' +
+          '**Optional:** Unlink all Twitch accounts\n' +
+          '*"Relink these chains of your own volition. The server must bear the inconvenience of one man\'s exploit."*\n\n' +
           '**THIS ACTION CANNOT BE UNDONE!**\n\n' +
-          'To confirm, click the button below and type the following phrase exactly:\n' +
-          '```yes i want to reset everything, return to the past NOW!```'
+          'To confirm, click the button below and choose your options.'
         )
         .setTimestamp()
         .setFooter({ text: 'Admin Command' });
@@ -74,8 +75,16 @@ module.exports = {
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true);
 
-          const actionRow = new ActionRowBuilder().addComponents(confirmationInput);
-          modal.addComponents(actionRow);
+          const twitchUnlinkInput = new TextInputBuilder()
+            .setCustomId('unlink_twitch')
+            .setLabel('Unlink Twitch? (type "yes" to unlink, or leave blank)')
+            .setPlaceholder('Leave blank to keep Twitch links')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false);
+
+          const row1 = new ActionRowBuilder().addComponents(confirmationInput);
+          const row2 = new ActionRowBuilder().addComponents(twitchUnlinkInput);
+          modal.addComponents(row1, row2);
 
           await i.showModal(modal);
 
@@ -87,7 +96,9 @@ module.exports = {
             });
 
             const phrase = submitted.fields.getTextInputValue('confirmation_phrase');
+            const unlinkTwitchInput = submitted.fields.getTextInputValue('unlink_twitch').toLowerCase().trim();
             const requiredPhrase = 'yes i want to reset everything, return to the past NOW!';
+            const unlinkTwitch = unlinkTwitchInput === 'yes';
 
             if (phrase !== requiredPhrase) {
               await submitted.reply({
@@ -102,13 +113,26 @@ module.exports = {
             await submitted.deferReply({ ephemeral: true });
 
             // Perform the reset
-            await db.query(`
-              UPDATE users
-              SET currency = 0,
-                  premium_currency = 0,
-                  xp = 0,
-                  level = 1
-            `);
+            if (unlinkTwitch) {
+              // Reset stats AND unlink Twitch accounts
+              await db.query(`
+                UPDATE users
+                SET currency = 0,
+                    premium_currency = 0,
+                    xp = 0,
+                    level = 1,
+                    twitch_id = NULL
+              `);
+            } else {
+              // Reset stats only, keep Twitch links
+              await db.query(`
+                UPDATE users
+                SET currency = 0,
+                    premium_currency = 0,
+                    xp = 0,
+                    level = 1
+              `);
+            }
 
             await db.query('DELETE FROM user_achievements');
             await db.query('DELETE FROM transactions');
@@ -117,18 +141,24 @@ module.exports = {
               SET streak_days = 0
             `);
 
+            let successDescription =
+              '**All user data has been permanently deleted:**\n\n' +
+              '✓ All currency and gems reset to 0\n' +
+              '✓ All XP reset to 0 and levels to 1\n' +
+              '✓ All achievements cleared\n' +
+              '✓ All transaction history deleted\n' +
+              '✓ All daily streaks reset to 0\n';
+
+            if (unlinkTwitch) {
+              successDescription += '✓ All Twitch accounts unlinked\n';
+            }
+
+            successDescription += '\n**The slate has been wiped clean.**';
+
             const successEmbed = new EmbedBuilder()
               .setColor(config.colors.success)
               .setTitle('✅ All Stats Have Been Reset')
-              .setDescription(
-                '**All user data has been permanently deleted:**\n\n' +
-                '✓ All currency and gems reset to 0\n' +
-                '✓ All XP reset to 0 and levels to 1\n' +
-                '✓ All achievements cleared\n' +
-                '✓ All transaction history deleted\n' +
-                '✓ All daily streaks reset to 0\n\n' +
-                '**The slate has been wiped clean.**'
-              )
+              .setDescription(successDescription)
               .setTimestamp()
               .setFooter({ text: `Reset by ${interaction.user.username}` });
 

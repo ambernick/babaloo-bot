@@ -506,6 +506,17 @@
       </div>
       <form id="reset-form">
         <div class="form-group">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="unlink-twitch" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+            <span style="color: #764ba2; font-weight: bold;">Also unlink all Twitch accounts</span>
+          </label>
+          <div id="twitch-warning" style="display: none; background: #e3f2fd; border: 2px solid #2196f3; padding: 15px; border-radius: 5px; margin-top: 10px;">
+            <p style="color: #1565c0; font-style: italic; margin: 0;">
+              "Relink these chains of your own volition. The server must bear the inconvenience of one man's exploit."
+            </p>
+          </div>
+        </div>
+        <div class="form-group">
           <label style="color: #c92a2a; font-weight: bold;">Type the following phrase to confirm:</label>
           <p style="font-style: italic; color: #666; margin: 10px 0;">"yes i want to reset everything, return to the past NOW!"</p>
           <input
@@ -802,7 +813,14 @@
     function closeResetModal() {
       document.getElementById('reset-modal').classList.remove('active');
       document.getElementById('reset-form').reset();
+      document.getElementById('twitch-warning').style.display = 'none';
     }
+
+    // Toggle Twitch warning message
+    document.getElementById('unlink-twitch').addEventListener('change', (e) => {
+      const warning = document.getElementById('twitch-warning');
+      warning.style.display = e.target.checked ? 'block' : 'none';
+    });
 
     // Award form submission
     document.getElementById('award-form').addEventListener('submit', async (e) => {
@@ -882,26 +900,37 @@
 
       const confirmation = document.getElementById('reset-confirmation').value;
       const requiredPhrase = 'yes i want to reset everything, return to the past NOW!';
+      const unlinkTwitch = document.getElementById('unlink-twitch').checked;
 
       if (confirmation !== requiredPhrase) {
         showAlert('Confirmation phrase does not match! Reset cancelled.', 'error');
         return;
       }
 
-      if (!confirm('Are you ABSOLUTELY SURE you want to reset ALL stats? This cannot be undone!')) {
+      let confirmMessage = 'Are you ABSOLUTELY SURE you want to reset ALL stats? This cannot be undone!';
+      if (unlinkTwitch) {
+        confirmMessage += '\n\nThis will also UNLINK all Twitch accounts!';
+      }
+
+      if (!confirm(confirmMessage)) {
         return;
       }
 
       try {
         const response = await fetch('/api/admin/reset-all', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ unlinkTwitch })
         });
 
         const result = await response.json();
 
         if (result.success) {
-          showAlert('All stats have been reset successfully!', 'success');
+          let message = 'All stats have been reset successfully!';
+          if (unlinkTwitch) {
+            message += ' Twitch accounts have been unlinked.';
+          }
+          showAlert(message, 'success');
           closeResetModal();
           loadUsers(currentPage);
           loadStats();

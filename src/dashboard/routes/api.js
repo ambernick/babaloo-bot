@@ -454,14 +454,29 @@ router.post('/admin/reset-all', async (req, res) => {
   }
 
   try {
+    const { unlinkTwitch } = req.body;
+
     // Reset all users to defaults
-    await db.query(`
-      UPDATE users
-      SET currency = 0,
-          premium_currency = 0,
-          xp = 0,
-          level = 1
-    `);
+    if (unlinkTwitch) {
+      // Reset stats AND unlink Twitch accounts
+      await db.query(`
+        UPDATE users
+        SET currency = 0,
+            premium_currency = 0,
+            xp = 0,
+            level = 1,
+            twitch_id = NULL
+      `);
+    } else {
+      // Reset stats only, keep Twitch links
+      await db.query(`
+        UPDATE users
+        SET currency = 0,
+            premium_currency = 0,
+            xp = 0,
+            level = 1
+      `);
+    }
 
     // Delete all user achievements
     await db.query('DELETE FROM user_achievements');
@@ -477,7 +492,8 @@ router.post('/admin/reset-all', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'All stats have been reset successfully'
+      message: 'All stats have been reset successfully',
+      twitchUnlinked: !!unlinkTwitch
     });
   } catch (error) {
     console.error('API error:', error);
