@@ -105,7 +105,6 @@ module.exports = {
                 content: '❌ **Confirmation phrase does not match!** Reset cancelled for safety.',
                 ephemeral: true
               });
-              collector.stop();
               return;
             }
 
@@ -167,27 +166,10 @@ module.exports = {
               ephemeral: true
             });
 
-            collector.stop();
-
           } catch (error) {
             console.error('Error in modal submission:', error);
-            // Modal timeout or error
-            await i.followUp({
-              content: '❌ Confirmation timed out or failed. Reset cancelled.',
-              ephemeral: true
-            });
-            collector.stop();
+            // Modal timeout or error - interaction already handled by showing modal
           }
-        }
-      });
-
-      collector.on('end', async (collected, reason) => {
-        if (reason === 'time') {
-          await interaction.editReply({
-            content: '❌ Confirmation timed out. Reset cancelled.',
-            components: [],
-            embeds: []
-          });
         }
       });
 
