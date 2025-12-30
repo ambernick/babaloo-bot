@@ -88,9 +88,9 @@ module.exports = {
 
           await i.showModal(modal);
 
-          // Wait for modal submission
+          // Wait for modal submission - use interaction.awaitModalSubmit instead of i.awaitModalSubmit
           try {
-            const submitted = await i.awaitModalSubmit({
+            const submitted = await interaction.awaitModalSubmit({
               filter: (submit) => submit.customId === 'reset_modal' && submit.user.id === interaction.user.id,
               time: 120000 // 2 minutes
             });
