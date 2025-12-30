@@ -447,4 +447,42 @@ router.post('/admin/take', async (req, res) => {
   }
 });
 
+// Admin: Reset ALL stats (nuclear option)
+router.post('/admin/reset-all', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    // Reset all users to defaults
+    await db.query(`
+      UPDATE users
+      SET currency = 0,
+          premium_currency = 0,
+          xp = 0,
+          level = 1
+    `);
+
+    // Delete all user achievements
+    await db.query('DELETE FROM user_achievements');
+
+    // Delete all transactions
+    await db.query('DELETE FROM transactions');
+
+    // Reset user profiles
+    await db.query(`
+      UPDATE user_profiles
+      SET streak_days = 0
+    `);
+
+    res.json({
+      success: true,
+      message: 'All stats have been reset successfully'
+    });
+  } catch (error) {
+    console.error('API error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

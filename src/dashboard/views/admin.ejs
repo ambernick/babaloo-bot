@@ -401,6 +401,7 @@
           <div style="display: flex; gap: 10px;">
             <button class="btn btn-success btn-sm" onclick="openAwardModal()">Award Resources</button>
             <button class="btn btn-danger btn-sm" onclick="openTakeModal()">Take Resources</button>
+            <button class="btn btn-danger btn-sm" onclick="openResetModal()" style="background: linear-gradient(135deg, #c92a2a 0%, #a61e1e 100%);">Reset All Stats</button>
           </div>
         </div>
         <div id="users-list" class="loading">Loading users...</div>
@@ -483,6 +484,41 @@
         <div class="action-buttons">
           <button type="submit" class="btn btn-danger">Take Resources</button>
           <button type="button" class="btn" onclick="closeTakeModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Reset All Modal -->
+  <div id="reset-modal" class="modal">
+    <div class="modal-content">
+      <h3 style="color: #c92a2a;">⚠️ RESET ALL STATS</h3>
+      <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+        <strong style="color: #856404;">WARNING:</strong>
+        <p style="color: #856404; margin-top: 10px;">This will permanently delete ALL user data including:</p>
+        <ul style="color: #856404; margin-left: 20px; margin-top: 10px;">
+          <li>All currency and gems</li>
+          <li>All XP and levels</li>
+          <li>All achievements</li>
+          <li>All transaction history</li>
+        </ul>
+        <p style="color: #c92a2a; margin-top: 10px; font-weight: bold;">THIS ACTION CANNOT BE UNDONE!</p>
+      </div>
+      <form id="reset-form">
+        <div class="form-group">
+          <label style="color: #c92a2a; font-weight: bold;">Type the following phrase to confirm:</label>
+          <p style="font-style: italic; color: #666; margin: 10px 0;">"yes i want to reset everything, return to the past NOW!"</p>
+          <input
+            type="text"
+            id="reset-confirmation"
+            required
+            placeholder="Type the confirmation phrase exactly..."
+            style="border-color: #c92a2a;"
+          >
+        </div>
+        <div class="action-buttons">
+          <button type="submit" class="btn btn-danger" style="background: linear-gradient(135deg, #c92a2a 0%, #a61e1e 100%);">RESET EVERYTHING</button>
+          <button type="button" class="btn" onclick="closeResetModal()">Cancel</button>
         </div>
       </form>
     </div>
@@ -759,6 +795,15 @@
       openTakeModal();
     }
 
+    function openResetModal() {
+      document.getElementById('reset-modal').classList.add('active');
+    }
+
+    function closeResetModal() {
+      document.getElementById('reset-modal').classList.remove('active');
+      document.getElementById('reset-form').reset();
+    }
+
     // Award form submission
     document.getElementById('award-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -831,6 +876,44 @@
       }
     });
 
+    // Reset form submission
+    document.getElementById('reset-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const confirmation = document.getElementById('reset-confirmation').value;
+      const requiredPhrase = 'yes i want to reset everything, return to the past NOW!';
+
+      if (confirmation !== requiredPhrase) {
+        showAlert('Confirmation phrase does not match! Reset cancelled.', 'error');
+        return;
+      }
+
+      if (!confirm('Are you ABSOLUTELY SURE you want to reset ALL stats? This cannot be undone!')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/admin/reset-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert('All stats have been reset successfully!', 'success');
+          closeResetModal();
+          loadUsers(currentPage);
+          loadStats();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to reset stats'), 'error');
+        }
+      } catch (error) {
+        console.error('Error resetting stats:', error);
+        showAlert('Error resetting stats', 'error');
+      }
+    });
+
     // Show alert
     function showAlert(message, type) {
       const container = document.getElementById('alert-container');
@@ -874,6 +957,12 @@
     document.getElementById('take-modal').addEventListener('click', (e) => {
       if (e.target === e.currentTarget) {
         closeTakeModal();
+      }
+    });
+
+    document.getElementById('reset-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        closeResetModal();
       }
     });
   </script>
