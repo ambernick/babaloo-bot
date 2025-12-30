@@ -96,9 +96,15 @@ module.exports = {
             });
 
             const phrase = submitted.fields.getTextInputValue('confirmation_phrase');
-            const unlinkTwitchInput = submitted.fields.getTextInputValue('unlink_twitch').toLowerCase().trim();
+            // Safely get optional field - may be empty string
+            let unlinkTwitchInput = '';
+            try {
+              unlinkTwitchInput = submitted.fields.getTextInputValue('unlink_twitch') || '';
+            } catch (e) {
+              unlinkTwitchInput = '';
+            }
             const requiredPhrase = 'yes i want to reset everything, return to the past NOW!';
-            const unlinkTwitch = unlinkTwitchInput === 'yes';
+            const unlinkTwitch = unlinkTwitchInput.toLowerCase().trim() === 'yes';
 
             if (phrase !== requiredPhrase) {
               await submitted.reply({
@@ -168,7 +174,8 @@ module.exports = {
 
           } catch (error) {
             console.error('Error in modal submission:', error);
-            // Modal timeout or error - interaction already handled by showing modal
+            // If modal times out or user cancels, that's expected - no action needed
+            // The error is logged for debugging
           }
         }
       });
