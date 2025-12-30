@@ -1,0 +1,787 @@
+<!-- src/dashboard/views/admin.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Babaloo Bot</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .admin-badge {
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+      color: white;
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 15px;
+    }
+
+    .nav-links a {
+      color: #667eea;
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 5px;
+      transition: background 0.2s;
+    }
+
+    .nav-links a:hover {
+      background: #f0f0f0;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+
+    .stat-icon {
+      font-size: 36px;
+      margin-bottom: 10px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+      margin-top: 5px;
+    }
+
+    .content-section {
+      background: white;
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .content-section h2 {
+      color: #667eea;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .search-bar {
+      padding: 10px 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 5px;
+      width: 300px;
+      font-size: 14px;
+    }
+
+    .search-bar:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    th {
+      background: #f5f5f5;
+      font-weight: 600;
+      color: #667eea;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    th:hover {
+      background: #ebebeb;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: opacity 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #51cf66 0%, #37b24d 100%);
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-content h3 {
+      color: #667eea;
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #e0e0e0;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .pagination {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    .pagination button {
+      padding: 8px 16px;
+      border: 2px solid #667eea;
+      background: white;
+      color: #667eea;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .pagination button:hover:not(:disabled) {
+      background: #667eea;
+      color: white;
+    }
+
+    .pagination button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pagination button.active {
+      background: #667eea;
+      color: white;
+    }
+
+    .alert {
+      padding: 15px 20px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
+
+    .alert-success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .alert-error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    .tab {
+      padding: 12px 24px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      color: #666;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      color: #667eea;
+    }
+
+    .tab.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div style="display: flex; align-items: center;">
+        <h1>🛡️ Admin Dashboard</h1>
+        <span class="admin-badge">ADMIN</span>
+      </div>
+      <div class="nav-links">
+        <a href="/dashboard">User Dashboard</a>
+        <a href="/admin">Admin Panel</a>
+        <a href="/logout" class="btn btn-sm">Logout</a>
+      </div>
+    </header>
+
+    <div id="alert-container"></div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon">👥</div>
+        <div class="stat-value" id="total-users">-</div>
+        <div class="stat-label">Total Users</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-value" id="total-currency">-</div>
+        <div class="stat-label">Currency in Circulation</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">⭐</div>
+        <div class="stat-value" id="total-xp">-</div>
+        <div class="stat-label">Total XP Earned</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🏆</div>
+        <div class="stat-value" id="total-achievements">-</div>
+        <div class="stat-label">Achievements Unlocked</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">💎</div>
+        <div class="stat-value" id="total-premium">-</div>
+        <div class="stat-label">Premium Currency</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">📝</div>
+        <div class="stat-value" id="total-transactions">-</div>
+        <div class="stat-label">Total Transactions</div>
+      </div>
+    </div>
+
+    <div class="content-section">
+      <div class="tabs">
+        <button class="tab active" data-tab="users">User Management</button>
+        <button class="tab" data-tab="transactions">Recent Transactions</button>
+        <button class="tab" data-tab="leaderboards">Leaderboards</button>
+      </div>
+
+      <div id="users-tab" class="tab-content active">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <input type="text" class="search-bar" id="user-search" placeholder="Search users by username or Discord ID...">
+          <button class="btn btn-success btn-sm" onclick="openAwardModal()">Award Resources</button>
+        </div>
+        <div id="users-list" class="loading">Loading users...</div>
+        <div class="pagination" id="users-pagination"></div>
+      </div>
+
+      <div id="transactions-tab" class="tab-content">
+        <div id="transactions-list" class="loading">Loading transactions...</div>
+      </div>
+
+      <div id="leaderboards-tab" class="tab-content">
+        <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+          <button class="btn btn-sm" onclick="loadLeaderboard('currency')">Currency</button>
+          <button class="btn btn-sm" onclick="loadLeaderboard('xp')">XP</button>
+          <button class="btn btn-sm" onclick="loadLeaderboard('achievements')">Achievements</button>
+        </div>
+        <div id="leaderboard-list" class="loading">Select a leaderboard category</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Award Modal -->
+  <div id="award-modal" class="modal">
+    <div class="modal-content">
+      <h3>Award Resources to User</h3>
+      <form id="award-form">
+        <div class="form-group">
+          <label>User (Discord ID or search)</label>
+          <input type="text" id="award-user" required placeholder="Enter Discord ID">
+        </div>
+        <div class="form-group">
+          <label>Resource Type</label>
+          <select id="award-type" required>
+            <option value="currency">Currency (Coins)</option>
+            <option value="premium">Premium Currency (Gems)</option>
+            <option value="xp">XP</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Amount</label>
+          <input type="number" id="award-amount" required min="1" placeholder="Amount to award">
+        </div>
+        <div class="form-group">
+          <label>Reason (optional)</label>
+          <textarea id="award-reason" rows="3" placeholder="Reason for award..."></textarea>
+        </div>
+        <div class="action-buttons">
+          <button type="submit" class="btn btn-success">Award Resources</button>
+          <button type="button" class="btn" onclick="closeAwardModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let currentPage = 1;
+    const USERS_PER_PAGE = 25;
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = tab.dataset.tab;
+
+        // Update tab buttons
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        // Update tab content
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById(`${tabName}-tab`).classList.add('active');
+
+        // Load data for tab if needed
+        if (tabName === 'transactions' && !document.getElementById('transactions-list').dataset.loaded) {
+          loadRecentTransactions();
+        }
+      });
+    });
+
+    // Load stats
+    async function loadStats() {
+      try {
+        const [usersRes, currencyRes, xpRes, achievementsRes, premiumRes, transactionsRes] = await Promise.all([
+          fetch('/api/admin/stats/users').then(r => r.json()),
+          fetch('/api/admin/stats/currency').then(r => r.json()),
+          fetch('/api/admin/stats/xp').then(r => r.json()),
+          fetch('/api/admin/stats/achievements').then(r => r.json()),
+          fetch('/api/admin/stats/premium').then(r => r.json()),
+          fetch('/api/admin/stats/transactions').then(r => r.json())
+        ]);
+
+        document.getElementById('total-users').textContent = usersRes.count.toLocaleString();
+        document.getElementById('total-currency').textContent = currencyRes.total.toLocaleString();
+        document.getElementById('total-xp').textContent = xpRes.total.toLocaleString();
+        document.getElementById('total-achievements').textContent = achievementsRes.count.toLocaleString();
+        document.getElementById('total-premium').textContent = premiumRes.total.toLocaleString();
+        document.getElementById('total-transactions').textContent = transactionsRes.count.toLocaleString();
+      } catch (error) {
+        console.error('Error loading stats:', error);
+      }
+    }
+
+    // Load users
+    async function loadUsers(page = 1) {
+      currentPage = page;
+      const container = document.getElementById('users-list');
+      const searchQuery = document.getElementById('user-search').value;
+
+      try {
+        const response = await fetch(`/api/admin/users?page=${page}&limit=${USERS_PER_PAGE}&search=${encodeURIComponent(searchQuery)}`);
+        const data = await response.json();
+
+        if (data.users.length === 0) {
+          container.innerHTML = '<p>No users found.</p>';
+          return;
+        }
+
+        const table = `
+          <table>
+            <thead>
+              <tr>
+                <th onclick="sortUsers('username')">Username</th>
+                <th onclick="sortUsers('discord_id')">Discord ID</th>
+                <th onclick="sortUsers('currency')">Currency 🪙</th>
+                <th onclick="sortUsers('premium_currency')">Gems 💎</th>
+                <th onclick="sortUsers('xp')">XP ⭐</th>
+                <th onclick="sortUsers('level')">Level</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.users.map(user => `
+                <tr>
+                  <td>${user.username}</td>
+                  <td>${user.discord_id}</td>
+                  <td>${user.currency.toLocaleString()}</td>
+                  <td>${user.premium_currency}</td>
+                  <td>${user.xp.toLocaleString()}</td>
+                  <td>${user.level}</td>
+                  <td>
+                    <button class="btn btn-sm" onclick="viewUser('${user.discord_id}')">View</button>
+                    <button class="btn btn-success btn-sm" onclick="quickAward('${user.discord_id}', '${user.username}')">Award</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+
+        container.innerHTML = table;
+
+        // Update pagination
+        updatePagination(data.pagination);
+      } catch (error) {
+        console.error('Error loading users:', error);
+        container.innerHTML = '<p style="color: red;">Error loading users</p>';
+      }
+    }
+
+    function updatePagination(pagination) {
+      const container = document.getElementById('users-pagination');
+      const { page, totalPages } = pagination;
+
+      let html = '';
+
+      html += `<button ${page === 1 ? 'disabled' : ''} onclick="loadUsers(${page - 1})">Previous</button>`;
+
+      for (let i = Math.max(1, page - 2); i <= Math.min(totalPages, page + 2); i++) {
+        html += `<button class="${i === page ? 'active' : ''}" onclick="loadUsers(${i})">${i}</button>`;
+      }
+
+      html += `<button ${page === totalPages ? 'disabled' : ''} onclick="loadUsers(${page + 1})">Next</button>`;
+
+      container.innerHTML = html;
+    }
+
+    // Load recent transactions
+    async function loadRecentTransactions() {
+      const container = document.getElementById('transactions-list');
+      container.dataset.loaded = 'true';
+
+      try {
+        const response = await fetch('/api/admin/transactions?limit=50');
+        const data = await response.json();
+
+        if (data.length === 0) {
+          container.innerHTML = '<p>No transactions found.</p>';
+          return;
+        }
+
+        const table = `
+          <table>
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Type</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Currency Type</th>
+                <th>Description</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map(t => `
+                <tr>
+                  <td>${t.username}</td>
+                  <td>${t.type === 'earn' ? '➕' : '➖'} ${t.type}</td>
+                  <td>${t.category}</td>
+                  <td style="color: ${t.type === 'earn' ? 'green' : 'red'}">
+                    ${t.type === 'earn' ? '+' : '-'}${t.amount}
+                  </td>
+                  <td>${t.currency_type === 'regular' ? '🪙' : '💎'}</td>
+                  <td>${t.description || '-'}</td>
+                  <td>${new Date(t.created_at).toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+
+        container.innerHTML = table;
+      } catch (error) {
+        console.error('Error loading transactions:', error);
+        container.innerHTML = '<p style="color: red;">Error loading transactions</p>';
+      }
+    }
+
+    // Load leaderboard
+    async function loadLeaderboard(category) {
+      const container = document.getElementById('leaderboard-list');
+      container.innerHTML = '<div class="loading">Loading leaderboard...</div>';
+
+      try {
+        const response = await fetch(`/api/leaderboard/${category}?limit=25`);
+        const data = await response.json();
+
+        if (data.length === 0) {
+          container.innerHTML = '<p>No data available.</p>';
+          return;
+        }
+
+        let headers = '<th>Rank</th><th>Username</th>';
+        let valueKey = '';
+        let valueLabel = '';
+
+        switch (category) {
+          case 'currency':
+            headers += '<th>Currency 🪙</th>';
+            valueKey = 'currency';
+            break;
+          case 'xp':
+            headers += '<th>XP ⭐</th><th>Level</th>';
+            valueKey = 'xp';
+            break;
+          case 'achievements':
+            headers += '<th>Achievements 🏆</th>';
+            valueKey = 'count';
+            break;
+        }
+
+        const table = `
+          <table>
+            <thead>
+              <tr>${headers}</tr>
+            </thead>
+            <tbody>
+              ${data.map((user, index) => {
+                let valueCell = '';
+                if (category === 'xp') {
+                  valueCell = `<td>${user.xp.toLocaleString()}</td><td>${user.level}</td>`;
+                } else {
+                  valueCell = `<td>${user[valueKey].toLocaleString()}</td>`;
+                }
+
+                return `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>${user.username}</td>
+                    ${valueCell}
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+
+        container.innerHTML = table;
+      } catch (error) {
+        console.error('Error loading leaderboard:', error);
+        container.innerHTML = '<p style="color: red;">Error loading leaderboard</p>';
+      }
+    }
+
+    // Modal functions
+    function openAwardModal() {
+      document.getElementById('award-modal').classList.add('active');
+    }
+
+    function closeAwardModal() {
+      document.getElementById('award-modal').classList.remove('active');
+      document.getElementById('award-form').reset();
+    }
+
+    function quickAward(discordId, username) {
+      document.getElementById('award-user').value = discordId;
+      document.getElementById('award-user').placeholder = username;
+      openAwardModal();
+    }
+
+    // Award form submission
+    document.getElementById('award-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const discordId = document.getElementById('award-user').value;
+      const type = document.getElementById('award-type').value;
+      const amount = parseInt(document.getElementById('award-amount').value);
+      const reason = document.getElementById('award-reason').value;
+
+      try {
+        const response = await fetch('/api/admin/award', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            discordId,
+            [type]: amount,
+            reason
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert('Resources awarded successfully!', 'success');
+          closeAwardModal();
+          loadUsers(currentPage);
+          loadStats();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to award resources'), 'error');
+        }
+      } catch (error) {
+        console.error('Error awarding resources:', error);
+        showAlert('Error awarding resources', 'error');
+      }
+    });
+
+    // Show alert
+    function showAlert(message, type) {
+      const container = document.getElementById('alert-container');
+      const alert = document.createElement('div');
+      alert.className = `alert alert-${type}`;
+      alert.textContent = message;
+      container.appendChild(alert);
+
+      setTimeout(() => {
+        alert.remove();
+      }, 5000);
+    }
+
+    // User search
+    document.getElementById('user-search').addEventListener('input', () => {
+      loadUsers(1);
+    });
+
+    // Sort users (placeholder - would need backend support)
+    function sortUsers(column) {
+      console.log('Sort by:', column);
+      // TODO: Implement sorting on backend
+    }
+
+    function viewUser(discordId) {
+      // TODO: Implement user detail view
+      console.log('View user:', discordId);
+    }
+
+    // Initialize
+    loadStats();
+    loadUsers(1);
+
+    // Close modal when clicking outside
+    document.getElementById('award-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        closeAwardModal();
+      }
+    });
+  </script>
+</body>
+</html>

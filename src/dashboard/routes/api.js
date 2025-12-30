@@ -158,14 +158,14 @@ router.post('/admin/award', async (req, res) => {
   }
 
   try {
-    const { discordId, currency, xp, reason } = req.body;
+    const { discordId, currency, premium, xp, reason } = req.body;
 
-    if (!discordId || (!currency && !xp)) {
+    if (!discordId || (!currency && !premium && !xp)) {
       return res.status(400).json({ error: 'Invalid request' });
     }
 
-    const userResult = await userService.getUser(discordId);
-    
+    const userResult = await userService.getOrCreateUser(discordId, 'Unknown');
+
     if (!userResult.success) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -182,6 +182,15 @@ router.post('/admin/award', async (req, res) => {
       );
     }
 
+    if (premium) {
+      // Award premium currency
+      await db.query(
+        'UPDATE users SET premium_currency = premium_currency + $1 WHERE id = $2',
+        [premium, userResult.user.id]
+      );
+      results.premium = { success: true, amount: premium };
+    }
+
     if (xp) {
       const xpService = require('../../services/xpService');
       results.xp = await xpService.awardXP(
@@ -192,6 +201,159 @@ router.post('/admin/award', async (req, res) => {
     }
 
     res.json({ success: true, results });
+  } catch (error) {
+    console.error('API error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Get all stats
+router.get('/admin/stats/users', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const result = await db.query('SELECT COUNT(*) as count FROM users');
+    res.json({ count: parseInt(result.rows[0].count) });
+  } catch (error) {
+    console.error('API error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/admin/stats/currency', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const result = await db.query('SELECT SUM(currency) as total FROM users');
+    res.json({ total: parseInt(result.rows[0].total) || 0 });
+  } catch (error) {
+    console.error('API error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/admin/stats/xp', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const result = await db.query('SELECT SUM(xp) as total FROM users');
+    res.json({ total: parseInt(result.rows[0].total) || 0 });
+  } catch (error) {
+    console.error('API error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/admin/stats/achievements', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const result = await db.query('SELECT COUNT(*) as count FROM user_achievements WHERE completed_at IS NOT NULL');
+    res.json({ count: parseInt(result.rows[0].count) });
+  } catch (error) {
+    console.error('API error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/admin/stats/premium', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const result = await db.query('SELECT SUM(premium_currency) as total FROM users');
+    res.json({ total: parseInt(result.rows[0].total) || 0 });
+  } catch (error) {
+    console.error('API error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/admin/stats/transactions', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const result = await db.query('SELECT COUNT(*) as count FROM transactions');
+    res.json({ count: parseInt(result.rows[0].count) });
+  } catch (error) {
+    console.error('API error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Get all users with search and pagination
+router.get('/admin/users', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+
+    let query = 'SELECT * FROM users';
+    let countQuery = 'SELECT COUNT(*) FROM users';
+    let params = [limit, offset];
+
+    if (search) {
+      query += ' WHERE username ILIKE $3 OR discord_id ILIKE $3';
+      countQuery += ' WHERE username ILIKE $1 OR discord_id ILIKE $1';
+      params.push(`%${search}%`);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT $1 OFFSET $2';
+
+    const result = await db.query(query, params);
+    const countResult = await db.query(countQuery, search ? [`%${search}%`] : []);
+    const totalUsers = parseInt(countResult.rows[0].count);
+
+    res.json({
+      users: result.rows,
+      pagination: {
+        page,
+        limit,
+        totalUsers,
+        totalPages: Math.ceil(totalUsers / limit)
+      }
+    });
+  } catch (error) {
+    console.error('API error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Get recent transactions with user info
+router.get('/admin/transactions', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+
+    const result = await db.query(
+      `SELECT t.*, u.username, u.discord_id
+       FROM transactions t
+       JOIN users u ON t.user_id = u.id
+       ORDER BY t.created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    res.json(result.rows);
   } catch (error) {
     console.error('API error:', error);
     res.status(500).json({ error: 'Server error' });
