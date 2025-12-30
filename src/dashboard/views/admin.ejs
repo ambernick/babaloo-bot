@@ -398,7 +398,10 @@
       <div id="users-tab" class="tab-content active">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
           <input type="text" class="search-bar" id="user-search" placeholder="Search users by username or Discord ID...">
-          <button class="btn btn-success btn-sm" onclick="openAwardModal()">Award Resources</button>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-success btn-sm" onclick="openAwardModal()">Award Resources</button>
+            <button class="btn btn-danger btn-sm" onclick="openTakeModal()">Take Resources</button>
+          </div>
         </div>
         <div id="users-list" class="loading">Loading users...</div>
         <div class="pagination" id="users-pagination"></div>
@@ -447,6 +450,39 @@
         <div class="action-buttons">
           <button type="submit" class="btn btn-success">Award Resources</button>
           <button type="button" class="btn" onclick="closeAwardModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Take Modal -->
+  <div id="take-modal" class="modal">
+    <div class="modal-content">
+      <h3 style="color: #ff6b6b;">Take Resources from User</h3>
+      <form id="take-form">
+        <div class="form-group">
+          <label>User (Discord ID or search)</label>
+          <input type="text" id="take-user" required placeholder="Enter Discord ID">
+        </div>
+        <div class="form-group">
+          <label>Resource Type</label>
+          <select id="take-type" required>
+            <option value="currency">Currency (Coins)</option>
+            <option value="premium">Premium Currency (Gems)</option>
+            <option value="xp">XP</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Amount</label>
+          <input type="number" id="take-amount" required min="1" placeholder="Amount to take">
+        </div>
+        <div class="form-group">
+          <label>Reason (optional)</label>
+          <textarea id="take-reason" rows="3" placeholder="Reason for taking resources..."></textarea>
+        </div>
+        <div class="action-buttons">
+          <button type="submit" class="btn btn-danger">Take Resources</button>
+          <button type="button" class="btn" onclick="closeTakeModal()">Cancel</button>
         </div>
       </form>
     </div>
@@ -539,6 +575,7 @@
                   <td>
                     <button class="btn btn-sm" onclick="viewUser('${user.discord_id}')">View</button>
                     <button class="btn btn-success btn-sm" onclick="quickAward('${user.discord_id}', '${user.username}')">Award</button>
+                    <button class="btn btn-danger btn-sm" onclick="quickTake('${user.discord_id}', '${user.username}')">Take</button>
                   </td>
                 </tr>
               `).join('')}
@@ -707,6 +744,21 @@
       openAwardModal();
     }
 
+    function openTakeModal() {
+      document.getElementById('take-modal').classList.add('active');
+    }
+
+    function closeTakeModal() {
+      document.getElementById('take-modal').classList.remove('active');
+      document.getElementById('take-form').reset();
+    }
+
+    function quickTake(discordId, username) {
+      document.getElementById('take-user').value = discordId;
+      document.getElementById('take-user').placeholder = username;
+      openTakeModal();
+    }
+
     // Award form submission
     document.getElementById('award-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -743,6 +795,42 @@
       }
     });
 
+    // Take form submission
+    document.getElementById('take-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const discordId = document.getElementById('take-user').value;
+      const type = document.getElementById('take-type').value;
+      const amount = parseInt(document.getElementById('take-amount').value);
+      const reason = document.getElementById('take-reason').value;
+
+      try {
+        const response = await fetch('/api/admin/take', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            discordId,
+            [type]: amount,
+            reason
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert('Resources taken successfully!', 'success');
+          closeTakeModal();
+          loadUsers(currentPage);
+          loadStats();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to take resources'), 'error');
+        }
+      } catch (error) {
+        console.error('Error taking resources:', error);
+        showAlert('Error taking resources', 'error');
+      }
+    });
+
     // Show alert
     function showAlert(message, type) {
       const container = document.getElementById('alert-container');
@@ -776,10 +864,16 @@
     loadStats();
     loadUsers(1);
 
-    // Close modal when clicking outside
+    // Close modals when clicking outside
     document.getElementById('award-modal').addEventListener('click', (e) => {
       if (e.target === e.currentTarget) {
         closeAwardModal();
+      }
+    });
+
+    document.getElementById('take-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        closeTakeModal();
       }
     });
   </script>

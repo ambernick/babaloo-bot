@@ -360,4 +360,91 @@ router.get('/admin/transactions', async (req, res) => {
   }
 });
 
+// Admin: Take currency/XP from user
+router.post('/admin/take', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const { discordId, currency, premium, xp, reason } = req.body;
+
+    if (!discordId || (!currency && !premium && !xp)) {
+      return res.status(400).json({ error: 'Invalid request' });
+    }
+
+    const userResult = await userService.getOrCreateUser(discordId, 'Unknown');
+
+    if (!userResult.success) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const results = {};
+
+    if (currency) {
+      // Take currency (deduct)
+      const currentBalance = await db.query(
+        'SELECT currency FROM users WHERE id = $1',
+        [userResult.user.id]
+      );
+
+      const newBalance = Math.max(0, currentBalance.rows[0].currency - currency);
+
+      await db.query(
+        'UPDATE users SET currency = $1 WHERE id = $2',
+        [newBalance, userResult.user.id]
+      );
+
+      // Log transaction
+      await db.query(
+        `INSERT INTO transactions (user_id, type, category, amount, currency_type, description)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [userResult.user.id, 'spend', 'admin_take', currency, 'regular', reason || 'Admin took resources']
+      );
+
+      results.currency = { success: true, amount: currency, newBalance };
+    }
+
+    if (premium) {
+      // Take premium currency (deduct)
+      const currentBalance = await db.query(
+        'SELECT premium_currency FROM users WHERE id = $1',
+        [userResult.user.id]
+      );
+
+      const newBalance = Math.max(0, currentBalance.rows[0].premium_currency - premium);
+
+      await db.query(
+        'UPDATE users SET premium_currency = $1 WHERE id = $2',
+        [newBalance, userResult.user.id]
+      );
+
+      results.premium = { success: true, amount: premium, newBalance };
+    }
+
+    if (xp) {
+      // Take XP (deduct)
+      const currentXP = await db.query(
+        'SELECT xp FROM users WHERE id = $1',
+        [userResult.user.id]
+      );
+
+      const newXP = Math.max(0, currentXP.rows[0].xp - xp);
+      const newLevel = Math.floor(Math.sqrt(newXP / 100)) + 1;
+
+      await db.query(
+        'UPDATE users SET xp = $1, level = $2 WHERE id = $3',
+        [newXP, newLevel, userResult.user.id]
+      );
+
+      results.xp = { success: true, amount: xp, newXP, newLevel };
+    }
+
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('API error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
