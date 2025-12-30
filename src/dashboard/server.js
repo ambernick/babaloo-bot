@@ -80,7 +80,12 @@ app.get('/auth/discord', passport.authenticate('discord'));
 app.get('/auth/discord/callback',
   passport.authenticate('discord', { failureRedirect: '/login' }),
   (req, res) => {
-    res.redirect('/dashboard');
+    // Redirect admin users to admin panel, regular users to dashboard
+    if (req.user.id === process.env.ADMIN_USER_ID) {
+      res.redirect('/admin');
+    } else {
+      res.redirect('/dashboard');
+    }
   }
 );
 
