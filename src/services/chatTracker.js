@@ -19,13 +19,24 @@ class ChatTracker {
 
     try {
       const userResult = await userService.getOrCreateUser(userId, username);
-      
+
       if (!userResult.success) {
         console.error('Error getting user:', userResult.error);
         return;
       }
 
       const user = userResult.user;
+
+      // Check for pending achievement notifications first
+      const achievementService = require('./achievementService');
+      const pendingAchievements = await achievementService.getPendingNotifications(user.id);
+
+      // Announce pending achievements if any
+      if (pendingAchievements && pendingAchievements.length > 0) {
+        for (const ach of pendingAchievements) {
+          await achievementService.announceAchievement(message.channel, message.author, ach);
+        }
+      }
 
       // Rate limiting: Max 1 earn per minute
       const lastTime = this.lastMessageTime.get(userId) || 0;

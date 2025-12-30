@@ -191,6 +191,8 @@ class UserService {
 
   // Link Twitch account to Discord account (merge accounts)
   async linkTwitchAccount(discordUserId, twitchId, twitchUsername) {
+    const achievementService = require('./achievementService');
+
     try {
       // Get the Discord user
       const discordUserResult = await db.query(
@@ -265,6 +267,15 @@ class UserService {
           await db.query('COMMIT');
 
           console.log(`✅ Merged Twitch account ${twitchUsername} into Discord account ${discordUser.username}`);
+
+          // Check for Link Up achievement and store as pending notification
+          const newAchievements = await achievementService.autoCheckAchievements(discordUserId);
+
+          // Store pending notifications for any newly unlocked achievements
+          for (const ach of newAchievements) {
+            await achievementService.storePendingNotification(discordUserId, ach.id);
+          }
+
           return {
             success: true,
             merged: true,
@@ -284,6 +295,15 @@ class UserService {
         );
 
         console.log(`✅ Linked Twitch account ${twitchUsername} to Discord account ${discordUser.username}`);
+
+        // Check for Link Up achievement and store as pending notification
+        const newAchievements = await achievementService.autoCheckAchievements(discordUserId);
+
+        // Store pending notifications for any newly unlocked achievements
+        for (const ach of newAchievements) {
+          await achievementService.storePendingNotification(discordUserId, ach.id);
+        }
+
         return { success: true, merged: false };
       }
     } catch (error) {

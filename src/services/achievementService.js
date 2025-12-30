@@ -261,6 +261,52 @@ class AchievementService {
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * Store a pending achievement notification for later display
+   */
+  async storePendingNotification(userId, achievementId) {
+    try {
+      await db.query(
+        'INSERT INTO pending_achievement_notifications (user_id, achievement_id) VALUES ($1, $2)',
+        [userId, achievementId]
+      );
+      return { success: true };
+    } catch (error) {
+      console.error('Error storing pending notification:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get and clear pending achievement notifications for a user
+   * Returns array of achievement objects
+   */
+  async getPendingNotifications(userId) {
+    try {
+      const result = await db.query(
+        `SELECT a.*
+         FROM pending_achievement_notifications pan
+         JOIN achievements a ON pan.achievement_id = a.id
+         WHERE pan.user_id = $1
+         ORDER BY pan.created_at ASC`,
+        [userId]
+      );
+
+      if (result.rows.length > 0) {
+        // Clear the pending notifications
+        await db.query(
+          'DELETE FROM pending_achievement_notifications WHERE user_id = $1',
+          [userId]
+        );
+      }
+
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting pending notifications:', error);
+      return [];
+    }
+  }
 }
 
 module.exports = new AchievementService();

@@ -83,11 +83,20 @@ CREATE TABLE IF NOT EXISTS custom_counters (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- PENDING ACHIEVEMENT NOTIFICATIONS (For achievements unlocked outside Discord)
+CREATE TABLE IF NOT EXISTS pending_achievement_notifications (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  achievement_id INTEGER REFERENCES achievements(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_users_discord ON users(discord_id);
 CREATE INDEX IF NOT EXISTS idx_users_twitch ON users(twitch_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_leaderboard_category ON leaderboard_cache(category, rank);
+CREATE INDEX IF NOT EXISTS idx_pending_achievements_user ON pending_achievement_notifications(user_id);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at()
