@@ -4,6 +4,7 @@ const session = require('express-session');
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
+const cors = require('cors');
 const Logger = require('../utils/logger');
 require('dotenv').config();
 
@@ -125,8 +126,19 @@ const apiRouter = require('./routes/api');
 app.use('/api', ensureAuthenticated, apiRouter);
 
 // Extension Backend Service (EBS) routes for Twitch Extension
+// Enable CORS for Twitch extension domains
+const corsOptions = {
+  origin: [
+    /^https:\/\/[a-z0-9]+\.ext-twitch\.tv$/,  // Twitch extension domains
+    'https://twitch.tv',
+    'https://www.twitch.tv'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
 const extensionRouter = require('./routes/extension');
-app.use('/extension', extensionRouter);
+app.use('/extension', cors(corsOptions), extensionRouter);
 
 // Twitch OAuth routes for account linking
 app.get('/auth/twitch/callback', async (req, res) => {
