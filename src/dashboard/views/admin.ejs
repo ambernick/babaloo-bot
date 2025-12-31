@@ -1423,7 +1423,7 @@
                 <tbody>
                   ${category.settings.map(setting => {
                     // Determine input type based on setting key
-                    const isTextSetting = setting.key.includes('channel_id') || setting.key.includes('_message') || setting.key.includes('role_id');
+                    const isTextSetting = setting.key.includes('channel_id') || setting.key.endsWith('_message') || setting.key.includes('role_id');
                     const inputType = isTextSetting ? 'text' : 'number';
                     const inputAttrs = isTextSetting ? '' : 'min="0" step="1"';
 
