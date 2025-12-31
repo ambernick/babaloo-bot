@@ -501,4 +501,232 @@ router.post('/admin/reset-all', async (req, res) => {
   }
 });
 
+// ==================== SHOP MANAGEMENT ROUTES ====================
+
+const shopService = require('../../services/shopService');
+
+// Get all shop items (admin)
+router.get('/admin/shop/items', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT * FROM shop_items
+      ORDER BY category, cost ASC
+    `);
+
+    res.json({ items: result.rows });
+  } catch (error) {
+    console.error('Error fetching shop items:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Create shop item (admin)
+router.post('/admin/shop/items', async (req, res) => {
+  try {
+    const {
+      name, description, cost, currency_type, category,
+      icon_url, stock, enabled, cooldown_minutes, global_cooldown_minutes,
+      requires_input, input_prompt, auto_fulfill
+    } = req.body;
+
+    const result = await db.query(`
+      INSERT INTO shop_items
+      (name, description, cost, currency_type, category, icon_url, stock,
+       enabled, cooldown_minutes, global_cooldown_minutes, requires_input,
+       input_prompt, auto_fulfill)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *
+    `, [
+      name, description || null, cost, currency_type || 'regular',
+      category || 'other', icon_url || null, stock || -1,
+      enabled !== false, cooldown_minutes || 0, global_cooldown_minutes || 0,
+      requires_input || false, input_prompt || null, auto_fulfill || false
+    ]);
+
+    res.json({ success: true, item: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating shop item:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update shop item (admin)
+router.put('/admin/shop/items/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      name, description, cost, currency_type, category,
+      icon_url, stock, enabled, cooldown_minutes, global_cooldown_minutes,
+      requires_input, input_prompt, auto_fulfill
+    } = req.body;
+
+    const result = await db.query(`
+      UPDATE shop_items
+      SET name = COALESCE($1, name),
+          description = COALESCE($2, description),
+          cost = COALESCE($3, cost),
+          currency_type = COALESCE($4, currency_type),
+          category = COALESCE($5, category),
+          icon_url = COALESCE($6, icon_url),
+          stock = COALESCE($7, stock),
+          enabled = COALESCE($8, enabled),
+          cooldown_minutes = COALESCE($9, cooldown_minutes),
+          global_cooldown_minutes = COALESCE($10, global_cooldown_minutes),
+          requires_input = COALESCE($11, requires_input),
+          input_prompt = COALESCE($12, input_prompt),
+          auto_fulfill = COALESCE($13, auto_fulfill)
+      WHERE id = $14
+      RETURNING *
+    `, [
+      name, description, cost, currency_type, category, icon_url, stock,
+      enabled, cooldown_minutes, global_cooldown_minutes,
+      requires_input, input_prompt, auto_fulfill, id
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    res.json({ success: true, item: result.rows[0] });
+  } catch (error) {
+    console.error('Error updating shop item:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete shop item (admin)
+router.delete('/admin/shop/items/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await db.query('DELETE FROM shop_items WHERE id = $1', [id]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting shop item:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get pending redemptions (admin)
+router.get('/admin/shop/redemptions/pending', async (req, res) => {
+  try {
+    const result = await shopService.getPendingRedemptions();
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
+    }
+
+    res.json({ redemptions: result.redemptions });
+  } catch (error) {
+    console.error('Error fetching pending redemptions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all redemptions (admin)
+router.get('/admin/shop/redemptions', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const status = req.query.status; // optional filter
+
+    let query = `
+      SELECT
+        r.id,
+        r.cost,
+        r.currency_type,
+        r.status,
+        r.user_input,
+        r.created_at,
+        r.fulfilled_at,
+        r.notes,
+        u.discord_id,
+        u.twitch_id,
+        u.username,
+        si.name as item_name,
+        si.description as item_description
+      FROM redemptions r
+      JOIN users u ON r.user_id = u.id
+      LEFT JOIN shop_items si ON r.shop_item_id = si.id
+    `;
+
+    const params = [];
+
+    if (status) {
+      query += ' WHERE r.status = $1';
+      params.push(status);
+    }
+
+    query += ' ORDER BY r.created_at DESC LIMIT $' + (params.length + 1);
+    params.push(limit);
+
+    const result = await db.query(query, params);
+
+    res.json({ redemptions: result.rows });
+  } catch (error) {
+    console.error('Error fetching redemptions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Fulfill redemption (admin)
+router.post('/admin/shop/redemptions/:id/fulfill', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { notes } = req.body;
+
+    // Get admin user ID from Discord ID
+    const adminResult = await db.query(
+      'SELECT id FROM users WHERE discord_id = $1',
+      [req.user.id]
+    );
+
+    if (adminResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Admin user not found' });
+    }
+
+    const adminUserId = adminResult.rows[0].id;
+    const result = await shopService.fulfillRedemption(id, adminUserId, notes);
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json({ success: true, redemption: result.redemption });
+  } catch (error) {
+    console.error('Error fulfilling redemption:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Refund redemption (admin)
+router.post('/admin/shop/redemptions/:id/refund', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    // Get admin user ID from Discord ID
+    const adminResult = await db.query(
+      'SELECT id FROM users WHERE discord_id = $1',
+      [req.user.id]
+    );
+
+    if (adminResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Admin user not found' });
+    }
+
+    const adminUserId = adminResult.rows[0].id;
+    const result = await shopService.refundRedemption(id, adminUserId, reason);
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json({ success: true, message: result.message });
+  } catch (error) {
+    console.error('Error refunding redemption:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

@@ -124,6 +124,10 @@ app.get('/admin', ensureAuthenticated, ensureAdmin, (req, res) => {
 const apiRouter = require('./routes/api');
 app.use('/api', ensureAuthenticated, apiRouter);
 
+// Extension Backend Service (EBS) routes for Twitch Extension
+const extensionRouter = require('./routes/extension');
+app.use('/extension', extensionRouter);
+
 // Twitch OAuth routes for account linking
 app.get('/auth/twitch/callback', async (req, res) => {
   const { code, state } = req.query;

@@ -128,6 +128,25 @@ class UserService {
     }
   }
 
+  // Get user by Twitch ID (without creating)
+  async getUserByTwitchId(twitchId) {
+    try {
+      const result = await db.query(
+        'SELECT * FROM users WHERE twitch_id = $1',
+        [twitchId]
+      );
+
+      if (result.rows.length === 0) {
+        return { success: false, error: 'User not found' };
+      }
+
+      return { success: true, user: result.rows[0] };
+    } catch (error) {
+      console.error('Error in getUserByTwitchId:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // Get user by Discord ID
   async getUser(discordId) {
     try {
