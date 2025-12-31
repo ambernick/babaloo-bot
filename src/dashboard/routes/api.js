@@ -6,6 +6,7 @@ const db = require('../../database/connection');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const settingsService = require('../../services/settingsService');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -902,6 +903,58 @@ router.delete('/admin/shop/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting shop item:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/settings
+ * Get all bot settings
+ */
+router.get('/admin/settings', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const result = await db.query('SELECT * FROM bot_settings ORDER BY category, key');
+    res.json({ success: true, settings: result.rows });
+  } catch (error) {
+    console.error('Error fetching settings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/settings/:key
+ * Update a bot setting
+ */
+router.put('/admin/settings/:key', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const { key } = req.params;
+    const { value } = req.body;
+
+    const result = await db.query(`
+      UPDATE bot_settings
+      SET value = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE key = $2
+      RETURNING *
+    `, [value, key]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Setting not found' });
+    }
+
+    // Invalidate settings cache so changes take effect immediately
+    settingsService.invalidateCache();
+
+    res.json({ success: true, setting: result.rows[0] });
+  } catch (error) {
+    console.error('Error updating setting:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

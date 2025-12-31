@@ -392,6 +392,7 @@
       <div class="tabs">
         <button class="tab active" data-tab="users">User Management</button>
         <button class="tab" data-tab="shop">Shop Management</button>
+        <button class="tab" data-tab="settings">Bot Settings</button>
         <button class="tab" data-tab="transactions">Recent Transactions</button>
         <button class="tab" data-tab="leaderboards">Leaderboards</button>
       </div>
@@ -415,6 +416,11 @@
           <button class="btn btn-success" onclick="openShopItemModal()">Add New Item</button>
         </div>
         <div id="shop-items-list" class="loading">Loading shop items...</div>
+      </div>
+
+      <div id="settings-tab" class="tab-content">
+        <h3 style="margin-bottom: 20px;">Bot Configuration</h3>
+        <div id="settings-list" class="loading">Loading settings...</div>
       </div>
 
       <div id="transactions-tab" class="tab-content">
@@ -666,6 +672,9 @@
         }
         if (tabName === 'shop' && !document.getElementById('shop-items-list').dataset.loaded) {
           loadShopItems();
+        }
+        if (tabName === 'settings' && !document.getElementById('settings-list').dataset.loaded) {
+          loadSettings();
         }
       });
     });
@@ -1367,6 +1376,104 @@
         showAlert('Error saving shop item', 'error');
       }
     });
+
+    // Settings Management Functions
+    async function loadSettings() {
+      const container = document.getElementById('settings-list');
+      container.dataset.loaded = 'true';
+
+      try {
+        const response = await fetch('/api/admin/settings');
+        const data = await response.json();
+
+        if (!data.success || data.settings.length === 0) {
+          container.innerHTML = '<p>No settings found.</p>';
+          return;
+        }
+
+        // Group settings by category
+        const categories = {
+          xp: { title: 'XP Rewards', settings: [] },
+          currency: { title: 'Currency Rewards', settings: [] },
+          limits: { title: 'Rate Limits', settings: [] }
+        };
+
+        data.settings.forEach(setting => {
+          if (categories[setting.category]) {
+            categories[setting.category].settings.push(setting);
+          }
+        });
+
+        let html = '';
+        for (const [catKey, category] of Object.entries(categories)) {
+          if (category.settings.length === 0) continue;
+
+          html += `
+            <div style="margin-bottom: 30px;">
+              <h4 style="margin-bottom: 15px; color: #9147ff;">${category.title}</h4>
+              <div style="display: grid; gap: 15px;">
+                ${category.settings.map(setting => `
+                  <div style="background: #18181b; border: 1px solid #2c2c34; border-radius: 8px; padding: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <div style="flex: 1;">
+                        <div style="font-weight: 600; margin-bottom: 5px;">${setting.description}</div>
+                        <div style="font-size: 12px; color: #adadb8;">Key: ${setting.key}</div>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 10px;">
+                        <input
+                          type="number"
+                          id="setting-${setting.key}"
+                          value="${setting.value}"
+                          min="0"
+                          step="1"
+                          style="width: 100px; padding: 8px; background: #0e0e10; border: 1px solid #2c2c34; border-radius: 6px; color: #efeff1;"
+                        />
+                        <button
+                          class="btn btn-sm"
+                          onclick="updateSetting('${setting.key}')"
+                          style="white-space: nowrap;"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        container.innerHTML = html;
+      } catch (error) {
+        console.error('Error loading settings:', error);
+        container.innerHTML = '<p style="color: red;">Error loading settings</p>';
+      }
+    }
+
+    async function updateSetting(key) {
+      const input = document.getElementById(`setting-${key}`);
+      const value = input.value;
+
+      try {
+        const response = await fetch(`/api/admin/settings/${key}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert('Setting updated successfully!', 'success');
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to update setting'), 'error');
+        }
+      } catch (error) {
+        console.error('Error updating setting:', error);
+        showAlert('Error updating setting', 'error');
+      }
+    }
 
     // Initialize
     loadStats();

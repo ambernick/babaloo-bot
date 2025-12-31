@@ -3,6 +3,7 @@ const Logger = require('../utils/logger');
 const userService = require('./userService');
 const currencyService = require('./currencyService');
 const xpService = require('./xpService');
+const settingsService = require('./settingsService');
 
 class TwitchBot {
   constructor() {
@@ -150,22 +151,31 @@ class TwitchBot {
 
       const user = userResult.user;
 
-      // Rate limiting: Max 1 earn per minute
+      // Get settings from database
+      const settings = await settingsService.getSettings([
+        'twitch_chat_xp',
+        'twitch_chat_currency',
+        'chat_cooldown_seconds',
+        'hourly_message_cap'
+      ]);
+
+      const currencyEarned = settings.twitch_chat_currency || 1;
+      const xpEarned = settings.twitch_chat_xp || 2;
+      const cooldownSeconds = settings.chat_cooldown_seconds || 60;
+      const hourlyCap = settings.hourly_message_cap || 60;
+
+      // Rate limiting: Cooldown check
       const lastTime = this.lastMessageTime.get(twitchUserId) || 0;
-      const timeSinceLastEarn = (now - lastTime) / 1000 / 60; // minutes
+      const timeSinceLastEarn = (now - lastTime) / 1000; // seconds
 
-      if (timeSinceLastEarn < 1) return;
+      if (timeSinceLastEarn < cooldownSeconds) return;
 
-      // Hourly cap: Max 60 currency per hour
+      // Hourly cap check
       const currentHour = new Date().getHours();
       const hourKey = `${twitchUserId}-${currentHour}`;
       const earnedThisHour = this.messagesThisHour.get(hourKey) || 0;
 
-      if (earnedThisHour >= 60) return;
-
-      // Award currency and XP
-      const currencyEarned = 1;
-      const xpEarned = 2;
+      if (earnedThisHour >= hourlyCap) return;
 
       await currencyService.awardCurrency(user.id, currencyEarned, 'twitch_chat', `Twitch: ${channel}`);
       const xpResult = await xpService.awardXP(user.id, xpEarned, 'twitch_chat');
