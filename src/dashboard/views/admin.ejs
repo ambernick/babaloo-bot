@@ -1538,6 +1538,11 @@
         const response = await fetch('/api/admin/stream-notifiers');
         const data = await response.json();
 
+        if (data.tableNotFound) {
+          container.innerHTML = '<p style="color: orange;">⚠️ Stream notifiers table not found. Run migration: <code>node scripts/add-stream-notifier-table.js</code></p>';
+          return;
+        }
+
         if (!data.success || data.notifiers.length === 0) {
           container.innerHTML = '<p>No stream notifiers configured. Click "Add Streamer" to add one!</p>';
           return;

@@ -997,6 +997,10 @@ router.get('/admin/stream-notifiers', ensureAdmin, async (req, res) => {
     res.json({ success: true, notifiers: result.rows });
   } catch (error) {
     console.error('Error getting stream notifiers:', error);
+    // If table doesn't exist, return empty array instead of error
+    if (error.code === '42P01') {
+      return res.json({ success: true, notifiers: [], tableNotFound: true });
+    }
     res.status(500).json({ success: false, error: error.message });
   }
 });
