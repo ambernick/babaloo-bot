@@ -144,6 +144,13 @@ function renderShopItems() {
     const currencySymbol = item.currency_type === 'premium' ? '💎' : '🪙';
     const costClass = item.currency_type === 'premium' ? 'premium' : '';
 
+    // Handle icon display - support both emojis and uploaded images
+    const icon = item.icon_url || '📦';
+    const isImage = icon.startsWith('http://') || icon.startsWith('https://') || icon.startsWith('/');
+    const iconHtml = isImage
+      ? `<img src="${EBS_URL}${icon}" alt="${escapeHtml(item.name)}" class="shop-item-icon-img" />`
+      : `<span class="shop-item-icon-emoji">${icon}</span>`;
+
     let stockText = '';
     if (item.stock !== -1) {
       stockText = `<span class="shop-item-stock ${item.stock < 5 ? 'low' : ''}">
@@ -155,6 +162,9 @@ function renderShopItems() {
 
     return `
       <div class="shop-item ${disabled}" data-item-id="${item.id}">
+        <div class="shop-item-icon">
+          ${iconHtml}
+        </div>
         <div class="shop-item-header">
           <div class="shop-item-name">${escapeHtml(item.name)}</div>
           <div class="shop-item-cost ${costClass}">
