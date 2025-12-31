@@ -2,12 +2,8 @@
 // This extension connects to the Extension Backend Service (EBS)
 
 // Configuration
-// Auto-detect environment based on URL parameter or default to production
-const urlParams = new URLSearchParams(window.location.search);
-const isDev = urlParams.get('env') === 'dev';
-const EBS_URL = isDev
-  ? 'https://babaloo-bot-dev-production.up.railway.app'
-  : 'https://babaloo-bot-production.up.railway.app';
+// DEV VERSION - Always uses dev server
+const EBS_URL = 'https://babaloo-bot-dev-production.up.railway.app';
 
 // Global state
 let auth = null;

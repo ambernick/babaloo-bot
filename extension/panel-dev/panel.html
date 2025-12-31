@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Babaloo Bot</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Loading State -->
+    <div id="loading" class="container">
+      <div class="loader"></div>
+      <p>Loading...</p>
+    </div>
+
+    <!-- Not Linked State -->
+    <div id="not-linked" class="container hidden">
+      <div class="warning-box">
+        <h2>🔗 Account Not Linked</h2>
+        <p>Use <code>!link</code> in chat to connect your Twitch account and start earning!</p>
+      </div>
+    </div>
+
+    <!-- Main App (when linked) -->
+    <div id="main-app" class="container hidden">
+      <!-- User Balance Section -->
+      <div class="balance-section">
+        <div class="stat-card">
+          <div class="stat-icon">🪙</div>
+          <div class="stat-info">
+            <div class="stat-label">Coins</div>
+            <div class="stat-value" id="currency">0</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon">💎</div>
+          <div class="stat-info">
+            <div class="stat-label">Gems</div>
+            <div class="stat-value" id="premium-currency">0</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon">⭐</div>
+          <div class="stat-info">
+            <div class="stat-label">Level</div>
+            <div class="stat-value" id="level">1</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="shop">🛒 Shop</button>
+        <button class="tab-btn" data-tab="history">📜 History</button>
+      </div>
+
+      <!-- Shop Tab -->
+      <div id="shop-tab" class="tab-content active">
+        <div id="shop-items" class="shop-grid">
+          <!-- Shop items will be loaded here -->
+        </div>
+
+        <div id="no-items" class="empty-state hidden">
+          <p>No items available in the shop right now.</p>
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div id="history-tab" class="tab-content hidden">
+        <div id="redemption-list" class="redemption-list">
+          <!-- Redemption history will be loaded here -->
+        </div>
+
+        <div id="no-history" class="empty-state hidden">
+          <p>You haven't redeemed anything yet!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="error" class="container hidden">
+      <div class="error-box">
+        <h2>❌ Error</h2>
+        <p id="error-message">Something went wrong. Please try again later.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Redemption Modal -->
+  <div id="redemption-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="modal-title">Confirm Redemption</h3>
+      <p id="modal-description"></p>
+
+      <div id="modal-input-section" class="hidden">
+        <label id="modal-input-label"></label>
+        <textarea id="modal-input" placeholder="Enter your response..." rows="3"></textarea>
+      </div>
+
+      <div class="modal-cost">
+        <span>Cost:</span>
+        <span id="modal-cost"></span>
+      </div>
+
+      <div class="modal-buttons">
+        <button id="modal-confirm" class="btn btn-primary">Redeem</button>
+        <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+      </div>
+
+      <div id="modal-loading" class="hidden">
+        <div class="loader"></div>
+        <p>Processing...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>
