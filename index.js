@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const Logger = require('./src/utils/logger');
 const chatTracker = require('./src/services/chatTracker');
+const voiceTracker = require('./src/services/voiceTracker');
 const levelUp = require('./src/events/levelUp');
 const achievementService = require('./src/config/achievements');
 const { startDashboard } = require('./src/dashboard/server');
@@ -17,6 +18,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates,
   ]
 });
 
@@ -113,6 +115,15 @@ client.once('clientReady', async () => {
     Logger.error('Error initializing Twitch bot:', error);
   }
 
+  // Initialize voice tracker
+  try {
+    await voiceTracker.initializeExistingUsers(client);
+    voiceTracker.start(client);
+    Logger.success('Voice tracking enabled');
+  } catch (error) {
+    Logger.error('Error initializing voice tracker:', error);
+  }
+
   // Start dashboard server if port is set
   if (process.env.DASHBOARD_PORT) {
     try {
@@ -123,9 +134,29 @@ client.once('clientReady', async () => {
   }
 });
 
+// Handle voice state updates
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  const member = newState.member;
+
+  // User joined a voice channel
+  if (!oldState.channel && newState.channel) {
+    await voiceTracker.handleVoiceJoin(member, newState.channel);
+  }
+  // User left a voice channel
+  else if (oldState.channel && !newState.channel) {
+    await voiceTracker.handleVoiceLeave(member);
+  }
+  // User switched channels
+  else if (oldState.channel && newState.channel && oldState.channel.id !== newState.channel.id) {
+    await voiceTracker.handleVoiceLeave(member);
+    await voiceTracker.handleVoiceJoin(member, newState.channel);
+  }
+});
+
 // Graceful shutdown
 process.on('SIGINT', async () => {
   Logger.info('👋 Shutting down gracefully...');
+  voiceTracker.stop();
   await twitchBot.disconnect();
   client.destroy();
   process.exit(0);
