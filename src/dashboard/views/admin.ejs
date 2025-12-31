@@ -559,8 +559,16 @@
           <textarea id="shop-item-description" rows="3" placeholder="What does this reward do?"></textarea>
         </div>
         <div class="form-group">
-          <label>Icon/Emoji</label>
-          <input type="text" id="shop-item-icon" placeholder="e.g., 💧" maxlength="10">
+          <label>Icon</label>
+          <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+            <input type="text" id="shop-item-icon" placeholder="Emoji (e.g., 💧) or image URL" style="flex: 1;">
+            <button type="button" class="btn btn-sm" onclick="document.getElementById('icon-upload').click()">Upload Image</button>
+          </div>
+          <input type="file" id="icon-upload" accept="image/*" style="display: none;">
+          <div id="icon-preview" style="margin-top: 10px; text-align: center;">
+            <span id="icon-preview-text" style="font-size: 48px;"></span>
+            <img id="icon-preview-img" style="max-width: 100px; max-height: 100px; display: none;">
+          </div>
         </div>
         <div class="form-group">
           <label>Category</label>
@@ -1090,9 +1098,15 @@
               </tr>
             </thead>
             <tbody>
-              ${data.items.map(item => `
+              ${data.items.map(item => {
+                const icon = item.icon_url || '📦';
+                const isImage = icon.startsWith('http://') || icon.startsWith('https://') || icon.startsWith('/');
+                const iconHtml = isImage
+                  ? `<img src="${icon}" style="max-width: 40px; max-height: 40px;" />`
+                  : `<span style="font-size: 24px;">${icon}</span>`;
+                return `
                 <tr>
-                  <td style="font-size: 24px;">${item.icon_url || '📦'}</td>
+                  <td>${iconHtml}</td>
                   <td><strong>${item.name}</strong></td>
                   <td>${item.description || '-'}</td>
                   <td>${item.cost} ${item.currency_type === 'regular' ? '🪙' : '💎'}</td>
@@ -1105,7 +1119,8 @@
                     <button class="btn btn-danger btn-sm" onclick="deleteShopItem(${item.id}, '${item.name}')">Delete</button>
                   </td>
                 </tr>
-              `).join('')}
+              `;
+              }).join('')}
             </tbody>
           </table>
         `;
@@ -1140,11 +1155,15 @@
         if (item.requires_input) {
           document.getElementById('input-prompt-group').style.display = 'block';
         }
+
+        // Update icon preview
+        updateIconPreview(item.icon_url || '');
       } else {
         title.textContent = 'Add New Shop Item';
         document.getElementById('shop-item-form').reset();
         document.getElementById('shop-item-id').value = '';
         document.getElementById('shop-item-enabled').checked = true;
+        updateIconPreview('');
       }
 
       modal.classList.add('active');
@@ -1189,6 +1208,76 @@
       const inputPromptGroup = document.getElementById('input-prompt-group');
       inputPromptGroup.style.display = e.target.checked ? 'block' : 'none';
     });
+
+    // Icon upload handler
+    document.getElementById('icon-upload').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Validate file size (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        showAlert('Image must be less than 2MB', 'error');
+        return;
+      }
+
+      // Show loading
+      const iconInput = document.getElementById('shop-item-icon');
+      iconInput.value = 'Uploading...';
+      iconInput.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append('icon', file);
+
+        const response = await fetch('/api/admin/upload-icon', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          iconInput.value = result.url;
+          updateIconPreview(result.url);
+          showAlert('Icon uploaded successfully!', 'success');
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to upload icon'), 'error');
+          iconInput.value = '';
+        }
+      } catch (error) {
+        console.error('Error uploading icon:', error);
+        showAlert('Error uploading icon', 'error');
+        iconInput.value = '';
+      } finally {
+        iconInput.disabled = false;
+      }
+    });
+
+    // Icon preview handler
+    document.getElementById('shop-item-icon').addEventListener('input', (e) => {
+      updateIconPreview(e.target.value);
+    });
+
+    function updateIconPreview(value) {
+      const previewText = document.getElementById('icon-preview-text');
+      const previewImg = document.getElementById('icon-preview-img');
+
+      if (!value) {
+        previewText.textContent = '';
+        previewImg.style.display = 'none';
+        return;
+      }
+
+      // Check if it's a URL (image) or emoji
+      if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/')) {
+        previewText.textContent = '';
+        previewImg.src = value;
+        previewImg.style.display = 'block';
+      } else {
+        previewText.textContent = value;
+        previewImg.style.display = 'none';
+      }
+    }
 
     // Shop item form submission
     document.getElementById('shop-item-form').addEventListener('submit', async (e) => {

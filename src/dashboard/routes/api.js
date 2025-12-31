@@ -3,6 +3,38 @@ const express = require('express');
 const router = express.Router();
 const userService = require('../../services/userService');
 const db = require('../../database/connection');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../public/uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'icon-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const uploadMiddleware = multer({
+  storage: storage,
+  limits: {
+    fileSize: 2 * 1024 * 1024 // 2MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    // Accept images only
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image files are allowed!'), false);
+    }
+    cb(null, true);
+  }
+});
 
 // Get user stats
 router.get('/user/:discordId/stats', async (req, res) => {
@@ -868,6 +900,29 @@ router.delete('/admin/shop/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting shop item:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/upload-icon
+ * Upload an icon image for shop items
+ */
+router.post('/admin/upload-icon', uploadMiddleware.single('icon'), async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    // Return the URL path to the uploaded file
+    const fileUrl = `/uploads/${req.file.filename}`;
+    res.json({ success: true, url: fileUrl });
+  } catch (error) {
+    console.error('Error uploading icon:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
