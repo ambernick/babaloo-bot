@@ -1,6 +1,7 @@
 // src/services/shopService.js
 const db = require('../database/connection');
 const currencyService = require('./currencyService');
+const twitchBot = require('./twitchBot');
 
 class ShopService {
   /**
@@ -222,6 +223,29 @@ class ShopService {
         }
 
         await db.query('COMMIT');
+
+        // Get user info for chat notification
+        const userResult = await db.query(
+          'SELECT username FROM users WHERE id = $1',
+          [userId]
+        );
+
+        // Send Twitch chat notification
+        if (userResult.rows.length > 0) {
+          const username = userResult.rows[0].username;
+          const currencySymbol = item.currency_type === 'premium' ? '💎' : '🪙';
+          const channels = process.env.TWITCH_CHANNELS
+            ? process.env.TWITCH_CHANNELS.split(',').map(ch => ch.trim())
+            : [];
+
+          // Send notification to all channels
+          for (const channel of channels) {
+            await twitchBot.say(
+              channel,
+              `${username} has redeemed ${item.name} for ${currencySymbol}${item.cost}!`
+            );
+          }
+        }
 
         return {
           success: true,
