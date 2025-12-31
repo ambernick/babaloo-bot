@@ -393,6 +393,7 @@
         <button class="tab active" data-tab="users">User Management</button>
         <button class="tab" data-tab="shop">Shop Management</button>
         <button class="tab" data-tab="settings">Bot Settings</button>
+        <button class="tab" data-tab="stream-notifiers">Stream Notifications</button>
         <button class="tab" data-tab="transactions">Recent Transactions</button>
         <button class="tab" data-tab="leaderboards">Leaderboards</button>
       </div>
@@ -421,6 +422,14 @@
       <div id="settings-tab" class="tab-content">
         <h3 style="margin-bottom: 20px;">Bot Configuration</h3>
         <div id="settings-list" class="loading">Loading settings...</div>
+      </div>
+
+      <div id="stream-notifiers-tab" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h3 style="margin: 0;">Stream Notifications</h3>
+          <button class="btn btn-success" onclick="openAddNotifierModal()">Add Streamer</button>
+        </div>
+        <div id="stream-notifiers-list" class="loading">Loading stream notifiers...</div>
       </div>
 
       <div id="transactions-tab" class="tab-content">
@@ -644,6 +653,36 @@
         <div class="action-buttons">
           <button type="submit" class="btn btn-success">Save Item</button>
           <button type="button" class="btn" onclick="closeShopItemModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Stream Notifier Modal -->
+  <div id="stream-notifier-modal" class="modal">
+    <div class="modal-content">
+      <h3 id="notifier-modal-title">Add Stream Notifier</h3>
+      <form id="stream-notifier-form">
+        <input type="hidden" id="notifier-id">
+        <div class="form-group">
+          <label>Twitch Username *</label>
+          <input type="text" id="notifier-username" required placeholder="e.g., falsettovibrato">
+          <small style="color: #adadb8; display: block; margin-top: 5px;">The Twitch username to monitor (without @)</small>
+        </div>
+        <div class="form-group">
+          <label>Custom Message (Optional)</label>
+          <textarea id="notifier-message" rows="4" placeholder="Leave empty to use default message. Placeholders: {username}, {title}, {game}, {url}"></textarea>
+          <small style="color: #adadb8; display: block; margin-top: 5px;">Example: {username} is now live playing {game}! Watch at {url}</small>
+        </div>
+        <div class="form-group">
+          <label style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="notifier-enabled" checked>
+            <span>Enabled</span>
+          </label>
+        </div>
+        <div class="action-buttons">
+          <button type="submit" class="btn btn-success">Save</button>
+          <button type="button" class="btn" onclick="closeNotifierModal()">Cancel</button>
         </div>
       </form>
     </div>
@@ -1489,6 +1528,154 @@
         showAlert('Error updating setting', 'error');
       }
     }
+
+    // Stream Notifier Functions
+    async function loadStreamNotifiers() {
+      const container = document.getElementById('stream-notifiers-list');
+      container.dataset.loaded = 'true';
+
+      try {
+        const response = await fetch('/api/admin/stream-notifiers');
+        const data = await response.json();
+
+        if (!data.success || data.notifiers.length === 0) {
+          container.innerHTML = '<p>No stream notifiers configured. Click "Add Streamer" to add one!</p>';
+          return;
+        }
+
+        const table = `
+          <table>
+            <thead>
+              <tr>
+                <th>Twitch Username</th>
+                <th>Custom Message</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.notifiers.map(notifier => `
+                <tr>
+                  <td style="font-weight: 600;">${notifier.twitch_username}</td>
+                  <td style="max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${notifier.custom_message || '<em style="color: #adadb8;">Default message</em>'}
+                  </td>
+                  <td>
+                    <span class="badge" style="background: ${notifier.enabled ? '#4CAF50' : '#666'};">
+                      ${notifier.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </td>
+                  <td>
+                    <button class="btn btn-sm btn-primary" onclick="editNotifier(${notifier.id})">Edit</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteNotifier(${notifier.id}, '${notifier.twitch_username}')">Delete</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+
+        container.innerHTML = table;
+      } catch (error) {
+        console.error('Error loading stream notifiers:', error);
+        container.innerHTML = '<p style="color: red;">Error loading stream notifiers</p>';
+      }
+    }
+
+    function openAddNotifierModal() {
+      document.getElementById('notifier-modal-title').textContent = 'Add Stream Notifier';
+      document.getElementById('notifier-id').value = '';
+      document.getElementById('notifier-username').value = '';
+      document.getElementById('notifier-message').value = '';
+      document.getElementById('notifier-enabled').checked = true;
+      document.getElementById('stream-notifier-modal').style.display = 'flex';
+    }
+
+    async function editNotifier(id) {
+      try {
+        const response = await fetch('/api/admin/stream-notifiers');
+        const data = await response.json();
+        const notifier = data.notifiers.find(n => n.id === id);
+
+        if (!notifier) {
+          showAlert('Notifier not found', 'error');
+          return;
+        }
+
+        document.getElementById('notifier-modal-title').textContent = 'Edit Stream Notifier';
+        document.getElementById('notifier-id').value = notifier.id;
+        document.getElementById('notifier-username').value = notifier.twitch_username;
+        document.getElementById('notifier-message').value = notifier.custom_message || '';
+        document.getElementById('notifier-enabled').checked = notifier.enabled;
+        document.getElementById('stream-notifier-modal').style.display = 'flex';
+      } catch (error) {
+        console.error('Error loading notifier:', error);
+        showAlert('Error loading notifier', 'error');
+      }
+    }
+
+    function closeNotifierModal() {
+      document.getElementById('stream-notifier-modal').style.display = 'none';
+    }
+
+    async function deleteNotifier(id, username) {
+      if (!confirm(`Are you sure you want to delete stream notifications for ${username}?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/admin/stream-notifiers/${id}`, {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert(`Stream notifier for ${username} deleted successfully!`, 'success');
+          loadStreamNotifiers();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to delete notifier'), 'error');
+        }
+      } catch (error) {
+        console.error('Error deleting notifier:', error);
+        showAlert('Error deleting notifier', 'error');
+      }
+    }
+
+    document.getElementById('stream-notifier-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const id = document.getElementById('notifier-id').value;
+      const data = {
+        twitch_username: document.getElementById('notifier-username').value.trim(),
+        custom_message: document.getElementById('notifier-message').value.trim() || null,
+        enabled: document.getElementById('notifier-enabled').checked
+      };
+
+      try {
+        const url = id ? `/api/admin/stream-notifiers/${id}` : '/api/admin/stream-notifiers';
+        const method = id ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert(`Stream notifier ${id ? 'updated' : 'added'} successfully!`, 'success');
+          closeNotifierModal();
+          loadStreamNotifiers();
+        } else {
+          showAlert('Error: ' + (result.error || `Failed to ${id ? 'update' : 'add'} notifier`), 'error');
+        }
+      } catch (error) {
+        console.error('Error saving notifier:', error);
+        showAlert('Error saving notifier', 'error');
+      }
+    });
 
     // Initialize
     loadStats();

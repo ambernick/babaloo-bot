@@ -982,4 +982,102 @@ router.post('/admin/upload-icon', uploadMiddleware.single('icon'), async (req, r
   }
 });
 
+// ============================================
+// Stream Notifier Management (Admin Only)
+// ============================================
+
+// Get all stream notifiers
+router.get('/admin/stream-notifiers', ensureAdmin, async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT * FROM stream_notifiers
+      ORDER BY created_at DESC
+    `);
+
+    res.json({ success: true, notifiers: result.rows });
+  } catch (error) {
+    console.error('Error getting stream notifiers:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Add new stream notifier
+router.post('/admin/stream-notifiers', ensureAdmin, async (req, res) => {
+  try {
+    const { twitch_username, custom_message } = req.body;
+
+    if (!twitch_username) {
+      return res.status(400).json({ success: false, error: 'Twitch username is required' });
+    }
+
+    const result = await db.query(`
+      INSERT INTO stream_notifiers (twitch_username, custom_message, enabled)
+      VALUES ($1, $2, true)
+      RETURNING *
+    `, [twitch_username.toLowerCase(), custom_message || null]);
+
+    res.json({ success: true, notifier: result.rows[0] });
+  } catch (error) {
+    if (error.code === '23505') { // Unique violation
+      return res.status(400).json({ success: false, error: 'This Twitch username is already added' });
+    }
+    console.error('Error adding stream notifier:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update stream notifier
+router.put('/admin/stream-notifiers/:id', ensureAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { twitch_username, custom_message, enabled } = req.body;
+
+    const result = await db.query(`
+      UPDATE stream_notifiers
+      SET twitch_username = COALESCE($1, twitch_username),
+          custom_message = $2,
+          enabled = COALESCE($3, enabled),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4
+      RETURNING *
+    `, [
+      twitch_username ? twitch_username.toLowerCase() : null,
+      custom_message !== undefined ? custom_message : null,
+      enabled,
+      id
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Stream notifier not found' });
+    }
+
+    res.json({ success: true, notifier: result.rows[0] });
+  } catch (error) {
+    console.error('Error updating stream notifier:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete stream notifier
+router.delete('/admin/stream-notifiers/:id', ensureAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await db.query(`
+      DELETE FROM stream_notifiers
+      WHERE id = $1
+      RETURNING *
+    `, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Stream notifier not found' });
+    }
+
+    res.json({ success: true, notifier: result.rows[0] });
+  } catch (error) {
+    console.error('Error deleting stream notifier:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

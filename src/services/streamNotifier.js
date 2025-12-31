@@ -1,13 +1,13 @@
 // src/services/streamNotifier.js
 const Logger = require('../utils/logger');
 const settingsService = require('./settingsService');
+const db = require('../database/connection');
 
 class StreamNotifier {
   constructor() {
-    this.isLive = false;
+    this.liveStreams = new Map(); // Track live status for each streamer (username -> { isLive, lastStreamId })
     this.checkInterval = null;
     this.client = null;
-    this.lastStreamId = null;
   }
 
   /**
@@ -19,10 +19,9 @@ class StreamNotifier {
     // Get Twitch configuration
     const twitchClientId = process.env.TWITCH_CLIENT_ID;
     const twitchClientSecret = process.env.TWITCH_CLIENT_SECRET;
-    const broadcasterUsername = process.env.TWITCH_BROADCASTER_USERNAME;
 
-    if (!twitchClientId || !twitchClientSecret || !broadcasterUsername) {
-      Logger.warn('Stream notifications disabled: Missing TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, or TWITCH_BROADCASTER_USERNAME');
+    if (!twitchClientId || !twitchClientSecret) {
+      Logger.warn('Stream notifications disabled: Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET');
       return false;
     }
 
@@ -89,15 +88,16 @@ class StreamNotifier {
   }
 
   /**
-   * Get broadcaster user ID from username
+   * Get user IDs for multiple Twitch usernames
    */
-  async getBroadcasterId() {
-    if (this.broadcasterId) {
-      return this.broadcasterId;
+  async getUserIds(usernames) {
+    if (usernames.length === 0) {
+      return {};
     }
 
-    const username = process.env.TWITCH_BROADCASTER_USERNAME;
-    const response = await fetch(`https://api.twitch.tv/helix/users?login=${username}`, {
+    // Build query string for multiple usernames (max 100 per request)
+    const params = usernames.map(u => `login=${encodeURIComponent(u)}`).join('&');
+    const response = await fetch(`https://api.twitch.tv/helix/users?${params}`, {
       headers: {
         'Client-ID': process.env.TWITCH_CLIENT_ID,
         'Authorization': `Bearer ${this.accessToken}`
@@ -105,26 +105,68 @@ class StreamNotifier {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to get broadcaster ID: ${response.status}`);
+      throw new Error(`Failed to get user IDs: ${response.status}`);
     }
 
     const data = await response.json();
-    if (data.data.length === 0) {
-      throw new Error(`Broadcaster not found: ${username}`);
-    }
 
-    this.broadcasterId = data.data[0].id;
-    return this.broadcasterId;
+    // Map username -> user_id
+    const userMap = {};
+    data.data.forEach(user => {
+      userMap[user.login.toLowerCase()] = user.id;
+    });
+
+    return userMap;
   }
 
   /**
-   * Check if stream is currently live
+   * Check if streams are currently live
    */
   async checkStreamStatus() {
     try {
-      const broadcasterId = await this.getBroadcasterId();
+      // Get all enabled stream notifiers from database
+      const result = await db.query(`
+        SELECT id, twitch_username, twitch_user_id, custom_message
+        FROM stream_notifiers
+        WHERE enabled = true
+      `);
 
-      const response = await fetch(`https://api.twitch.tv/helix/streams?user_id=${broadcasterId}`, {
+      const notifiers = result.rows;
+
+      if (notifiers.length === 0) {
+        return;
+      }
+
+      // Get user IDs for notifiers that don't have them cached
+      const notifiersNeedingIds = notifiers.filter(n => !n.twitch_user_id);
+      if (notifiersNeedingIds.length > 0) {
+        const userIds = await this.getUserIds(notifiersNeedingIds.map(n => n.twitch_username));
+
+        // Update database with fetched user IDs
+        for (const notifier of notifiersNeedingIds) {
+          const userId = userIds[notifier.twitch_username.toLowerCase()];
+          if (userId) {
+            await db.query(`
+              UPDATE stream_notifiers
+              SET twitch_user_id = $1
+              WHERE id = $2
+            `, [userId, notifier.id]);
+            notifier.twitch_user_id = userId;
+          }
+        }
+      }
+
+      // Build query string for all user IDs (max 100 per request)
+      const userIds = notifiers
+        .filter(n => n.twitch_user_id)
+        .map(n => `user_id=${n.twitch_user_id}`)
+        .join('&');
+
+      if (!userIds) {
+        return;
+      }
+
+      const response = await fetch(`https://api.twitch.tv/helix/streams?${userIds}`, {
         headers: {
           'Client-ID': process.env.TWITCH_CLIENT_ID,
           'Authorization': `Bearer ${this.accessToken}`
@@ -141,25 +183,35 @@ class StreamNotifier {
       }
 
       const data = await response.json();
-      const wasLive = this.isLive;
 
-      if (data.data.length > 0) {
-        const stream = data.data[0];
+      // Create map of currently live streams
+      const liveStreamsById = new Map();
+      data.data.forEach(stream => {
+        liveStreamsById.set(stream.user_id, stream);
+      });
 
-        // Stream is live
-        if (!wasLive || this.lastStreamId !== stream.id) {
-          // Stream just went live or it's a new stream
-          this.isLive = true;
-          this.lastStreamId = stream.id;
-          await this.sendLiveNotification(stream);
+      // Check each notifier
+      for (const notifier of notifiers) {
+        if (!notifier.twitch_user_id) continue;
+
+        const username = notifier.twitch_username;
+        const stream = liveStreamsById.get(notifier.twitch_user_id);
+        const trackedStream = this.liveStreams.get(username) || { isLive: false, lastStreamId: null };
+
+        if (stream) {
+          // Stream is live
+          if (!trackedStream.isLive || trackedStream.lastStreamId !== stream.id) {
+            // Stream just went live or it's a new stream
+            this.liveStreams.set(username, { isLive: true, lastStreamId: stream.id });
+            await this.sendLiveNotification(stream, notifier);
+          }
+        } else {
+          // Stream is offline
+          if (trackedStream.isLive) {
+            Logger.info(`Stream went offline: ${username}`);
+          }
+          this.liveStreams.set(username, { isLive: false, lastStreamId: null });
         }
-      } else {
-        // Stream is offline
-        if (wasLive) {
-          Logger.info('Stream went offline');
-        }
-        this.isLive = false;
-        this.lastStreamId = null;
       }
     } catch (error) {
       Logger.error('Error checking stream status:', error);
@@ -169,7 +221,7 @@ class StreamNotifier {
   /**
    * Send live notification to Discord
    */
-  async sendLiveNotification(stream) {
+  async sendLiveNotification(stream, notifier) {
     try {
       // Get notification channel from settings
       const settings = await settingsService.getSettings([
@@ -190,19 +242,21 @@ class StreamNotifier {
         return;
       }
 
-      const broadcasterUsername = process.env.TWITCH_BROADCASTER_USERNAME;
+      const username = notifier.twitch_username;
       const roleId = settings.stream_notification_role_id;
-      const customMessage = settings.stream_notification_message || `@everyone 🔴 **${broadcasterUsername} is now LIVE!**`;
+
+      // Use custom message from notifier if available, otherwise use default from settings
+      const customMessage = notifier.custom_message || settings.stream_notification_message || `@everyone 🔴 **{username} is now LIVE!**`;
 
       // Build notification message
       let message = customMessage;
 
       // Replace placeholders
       message = message
-        .replace('{username}', broadcasterUsername)
-        .replace('{title}', stream.title)
-        .replace('{game}', stream.game_name || 'No category')
-        .replace('{url}', `https://twitch.tv/${broadcasterUsername}`);
+        .replace(/{username}/g, username)
+        .replace(/{title}/g, stream.title)
+        .replace(/{game}/g, stream.game_name || 'No category')
+        .replace(/{url}/g, `https://twitch.tv/${username}`);
 
       // Add role mention if configured
       if (roleId && roleId !== 'everyone') {
@@ -213,11 +267,11 @@ class StreamNotifier {
       const embed = {
         color: 0x9147ff, // Twitch purple
         author: {
-          name: `${broadcasterUsername} is now live on Twitch!`,
+          name: `${username} is now live on Twitch!`,
           icon_url: stream.thumbnail_url ? stream.thumbnail_url.replace('{width}', '50').replace('{height}', '50') : undefined
         },
         title: stream.title,
-        url: `https://twitch.tv/${broadcasterUsername}`,
+        url: `https://twitch.tv/${username}`,
         description: stream.game_name ? `Playing **${stream.game_name}**` : undefined,
         thumbnail: {
           url: stream.thumbnail_url ? stream.thumbnail_url.replace('{width}', '320').replace('{height}', '180') + `?t=${Date.now()}` : undefined
@@ -240,20 +294,26 @@ class StreamNotifier {
         embeds: [embed]
       });
 
-      Logger.success(`Stream live notification sent: ${stream.title}`);
+      Logger.success(`Stream live notification sent for ${username}: ${stream.title}`);
     } catch (error) {
       Logger.error('Error sending live notification:', error);
     }
   }
 
   /**
-   * Get current stream info
+   * Get current stream info for a specific username
    */
-  async getStreamInfo() {
+  async getStreamInfo(username) {
     try {
-      const broadcasterId = await this.getBroadcasterId();
+      // Get user ID for the username
+      const userIds = await this.getUserIds([username]);
+      const userId = userIds[username.toLowerCase()];
 
-      const response = await fetch(`https://api.twitch.tv/helix/streams?user_id=${broadcasterId}`, {
+      if (!userId) {
+        return { isLive: false, error: 'User not found' };
+      }
+
+      const response = await fetch(`https://api.twitch.tv/helix/streams?user_id=${userId}`, {
         headers: {
           'Client-ID': process.env.TWITCH_CLIENT_ID,
           'Authorization': `Bearer ${this.accessToken}`
@@ -270,6 +330,7 @@ class StreamNotifier {
         const stream = data.data[0];
         return {
           isLive: true,
+          username: username,
           title: stream.title,
           game: stream.game_name,
           viewers: stream.viewer_count,
@@ -279,7 +340,8 @@ class StreamNotifier {
       }
 
       return {
-        isLive: false
+        isLive: false,
+        username: username
       };
     } catch (error) {
       Logger.error('Error getting stream info:', error);
