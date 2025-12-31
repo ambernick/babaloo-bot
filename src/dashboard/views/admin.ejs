@@ -629,6 +629,12 @@
             <span>Enabled (visible in shop)</span>
           </label>
         </div>
+        <div class="form-group">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="shop-item-send-notification" checked style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+            <span>Send chat notification on redemption</span>
+          </label>
+        </div>
         <div class="action-buttons">
           <button type="submit" class="btn btn-success">Save Item</button>
           <button type="button" class="btn" onclick="closeShopItemModal()">Cancel</button>
@@ -1181,6 +1187,7 @@
         document.getElementById('shop-item-input-prompt').value = item.input_prompt || '';
         document.getElementById('shop-item-auto-fulfill').checked = item.auto_fulfill;
         document.getElementById('shop-item-enabled').checked = item.enabled;
+        document.getElementById('shop-item-send-notification').checked = item.send_notification !== false;
 
         if (item.requires_input) {
           document.getElementById('input-prompt-group').style.display = 'block';
@@ -1332,7 +1339,8 @@
         requires_input: document.getElementById('shop-item-requires-input').checked,
         input_prompt: document.getElementById('shop-item-input-prompt').value,
         auto_fulfill: document.getElementById('shop-item-auto-fulfill').checked,
-        enabled: document.getElementById('shop-item-enabled').checked
+        enabled: document.getElementById('shop-item-enabled').checked,
+        send_notification: document.getElementById('shop-item-send-notification').checked
       };
 
       try {

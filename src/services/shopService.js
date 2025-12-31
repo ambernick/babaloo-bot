@@ -248,26 +248,28 @@ class ShopService {
 
         await db.query('COMMIT');
 
-        // Get user info for chat notification
-        const userResult = await db.query(
-          'SELECT username FROM users WHERE id = $1',
-          [userId]
-        );
+        // Send Twitch chat notification if enabled for this item
+        if (item.send_notification !== false) {
+          // Get user info for chat notification
+          const userResult = await db.query(
+            'SELECT username FROM users WHERE id = $1',
+            [userId]
+          );
 
-        // Send Twitch chat notification
-        if (userResult.rows.length > 0) {
-          const username = userResult.rows[0].username;
-          const currencySymbol = item.currency_type === 'premium' ? '💎' : '🪙';
-          const channels = process.env.TWITCH_CHANNELS
-            ? process.env.TWITCH_CHANNELS.split(',').map(ch => ch.trim())
-            : [];
+          if (userResult.rows.length > 0) {
+            const username = userResult.rows[0].username;
+            const currencySymbol = item.currency_type === 'premium' ? '💎' : '🪙';
+            const channels = process.env.TWITCH_CHANNELS
+              ? process.env.TWITCH_CHANNELS.split(',').map(ch => ch.trim())
+              : [];
 
-          // Send notification to all channels
-          for (const channel of channels) {
-            await twitchBot.say(
-              channel,
-              `${username} has redeemed ${item.name} for ${currencySymbol}${item.cost}!`
-            );
+            // Send notification to all channels
+            for (const channel of channels) {
+              await twitchBot.say(
+                channel,
+                `${username} has redeemed ${item.name} for ${currencySymbol}${item.cost}!`
+              );
+            }
           }
         }
 

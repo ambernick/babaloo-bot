@@ -807,18 +807,19 @@ router.post('/admin/shop', async (req, res) => {
       cooldown_seconds,
       requires_input,
       input_prompt,
-      auto_fulfill
+      auto_fulfill,
+      send_notification
     } = req.body;
 
     const result = await db.query(`
       INSERT INTO shop_items (
         name, description, cost, currency_type, category, icon_url,
-        stock, enabled, cooldown_seconds, requires_input, input_prompt, auto_fulfill
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        stock, enabled, cooldown_seconds, requires_input, input_prompt, auto_fulfill, send_notification
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `, [
       name, description, cost, currency_type, category, icon_url,
-      stock, enabled, cooldown_seconds, requires_input, input_prompt, auto_fulfill
+      stock, enabled, cooldown_seconds, requires_input, input_prompt, auto_fulfill, send_notification !== false
     ]);
 
     res.json({ success: true, item: result.rows[0] });
@@ -851,7 +852,8 @@ router.put('/admin/shop/:id', async (req, res) => {
       cooldown_seconds,
       requires_input,
       input_prompt,
-      auto_fulfill
+      auto_fulfill,
+      send_notification
     } = req.body;
 
     const result = await db.query(`
@@ -859,13 +861,13 @@ router.put('/admin/shop/:id', async (req, res) => {
       SET name = $1, description = $2, cost = $3, currency_type = $4,
           category = $5, icon_url = $6, stock = $7, enabled = $8,
           cooldown_seconds = $9, requires_input = $10, input_prompt = $11,
-          auto_fulfill = $12, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $13
+          auto_fulfill = $12, send_notification = $13, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $14
       RETURNING *
     `, [
       name, description, cost, currency_type, category, icon_url,
       stock, enabled, cooldown_seconds, requires_input, input_prompt,
-      auto_fulfill, id
+      auto_fulfill, send_notification !== false, id
     ]);
 
     if (result.rows.length === 0) {
