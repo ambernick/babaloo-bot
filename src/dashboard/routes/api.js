@@ -37,6 +37,14 @@ const uploadMiddleware = multer({
   }
 });
 
+// Admin middleware
+function ensureAdmin(req, res, next) {
+  if (req.isAuthenticated() && req.user.id === process.env.ADMIN_USER_ID) {
+    return next();
+  }
+  res.status(403).json({ error: 'Forbidden: Admin access only' });
+}
+
 // Get user stats
 router.get('/user/:discordId/stats', async (req, res) => {
   try {
