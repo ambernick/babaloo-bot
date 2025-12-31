@@ -595,8 +595,17 @@
           <input type="number" id="shop-item-stock" value="-1" placeholder="-1 for unlimited">
         </div>
         <div class="form-group">
-          <label>Cooldown (minutes, per user)</label>
-          <input type="number" id="shop-item-cooldown" value="0" min="0" placeholder="0 for no cooldown">
+          <label>Cooldown (per user)</label>
+          <div style="display: flex; gap: 10px;">
+            <div style="flex: 1;">
+              <input type="number" id="shop-item-cooldown-minutes" value="0" min="0" placeholder="Minutes" style="width: 100%;">
+              <small style="color: #adadb8;">Minutes</small>
+            </div>
+            <div style="flex: 1;">
+              <input type="number" id="shop-item-cooldown-seconds" value="0" min="0" max="59" placeholder="Seconds" style="width: 100%;">
+              <small style="color: #adadb8;">Seconds</small>
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label style="display: flex; align-items: center; cursor: pointer;">
@@ -1104,6 +1113,22 @@
                 const iconHtml = isImage
                   ? `<img src="${icon}" style="max-width: 40px; max-height: 40px;" />`
                   : `<span style="font-size: 24px;">${icon}</span>`;
+
+                // Format cooldown display
+                const cooldownSec = item.cooldown_seconds || 0;
+                const minutes = Math.floor(cooldownSec / 60);
+                const seconds = cooldownSec % 60;
+                let cooldownDisplay = '';
+                if (cooldownSec === 0) {
+                  cooldownDisplay = '-';
+                } else if (minutes > 0 && seconds > 0) {
+                  cooldownDisplay = `${minutes}m ${seconds}s`;
+                } else if (minutes > 0) {
+                  cooldownDisplay = `${minutes}m`;
+                } else {
+                  cooldownDisplay = `${seconds}s`;
+                }
+
                 return `
                 <tr>
                   <td>${iconHtml}</td>
@@ -1112,7 +1137,7 @@
                   <td>${item.cost} ${item.currency_type === 'regular' ? '🪙' : '💎'}</td>
                   <td>${item.category}</td>
                   <td>${item.stock === -1 ? '∞' : item.stock}</td>
-                  <td>${item.cooldown_minutes}m</td>
+                  <td>${cooldownDisplay}</td>
                   <td>${item.enabled ? '<span style="color: green;">✓ Enabled</span>' : '<span style="color: red;">✗ Disabled</span>'}</td>
                   <td>
                     <button class="btn btn-sm" onclick='editShopItem(${JSON.stringify(item)})'>Edit</button>
@@ -1146,7 +1171,12 @@
         document.getElementById('shop-item-currency').value = item.currency_type;
         document.getElementById('shop-item-cost').value = item.cost;
         document.getElementById('shop-item-stock').value = item.stock;
-        document.getElementById('shop-item-cooldown').value = item.cooldown_minutes;
+
+        // Split cooldown_seconds into minutes and seconds
+        const cooldownSec = item.cooldown_seconds || 0;
+        document.getElementById('shop-item-cooldown-minutes').value = Math.floor(cooldownSec / 60);
+        document.getElementById('shop-item-cooldown-seconds').value = cooldownSec % 60;
+
         document.getElementById('shop-item-requires-input').checked = item.requires_input;
         document.getElementById('shop-item-input-prompt').value = item.input_prompt || '';
         document.getElementById('shop-item-auto-fulfill').checked = item.auto_fulfill;
@@ -1284,6 +1314,12 @@
       e.preventDefault();
 
       const itemId = document.getElementById('shop-item-id').value;
+
+      // Combine minutes and seconds into total seconds
+      const cooldownMinutes = parseInt(document.getElementById('shop-item-cooldown-minutes').value) || 0;
+      const cooldownSeconds = parseInt(document.getElementById('shop-item-cooldown-seconds').value) || 0;
+      const totalCooldownSeconds = (cooldownMinutes * 60) + cooldownSeconds;
+
       const itemData = {
         name: document.getElementById('shop-item-name').value,
         description: document.getElementById('shop-item-description').value,
@@ -1292,7 +1328,7 @@
         currency_type: document.getElementById('shop-item-currency').value,
         cost: parseInt(document.getElementById('shop-item-cost').value),
         stock: parseInt(document.getElementById('shop-item-stock').value),
-        cooldown_minutes: parseInt(document.getElementById('shop-item-cooldown').value),
+        cooldown_seconds: totalCooldownSeconds,
         requires_input: document.getElementById('shop-item-requires-input').checked,
         input_prompt: document.getElementById('shop-item-input-prompt').value,
         auto_fulfill: document.getElementById('shop-item-auto-fulfill').checked,

@@ -12,7 +12,7 @@ class ShopService {
       let query = `
         SELECT
           id, name, description, cost, currency_type, category,
-          icon_url, stock, cooldown_minutes, global_cooldown_minutes,
+          icon_url, stock, cooldown_seconds, global_cooldown_seconds,
           requires_input, input_prompt
         FROM shop_items
         WHERE enabled = TRUE
@@ -98,7 +98,7 @@ class ShopService {
       }
 
       // Check user cooldown
-      if (item.cooldown_minutes > 0) {
+      if (item.cooldown_seconds > 0) {
         const cooldownResult = await db.query(
           'SELECT can_redeem_at FROM user_item_cooldowns WHERE user_id = $1 AND shop_item_id = $2',
           [userId, itemId]
@@ -109,17 +109,29 @@ class ShopService {
           const now = new Date();
 
           if (now < canRedeemAt) {
-            const minutesLeft = Math.ceil((canRedeemAt - now) / 1000 / 60);
+            const secondsLeft = Math.ceil((canRedeemAt - now) / 1000);
+            const minutes = Math.floor(secondsLeft / 60);
+            const seconds = secondsLeft % 60;
+
+            let timeLeft = '';
+            if (minutes > 0 && seconds > 0) {
+              timeLeft = `${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+              timeLeft = `${minutes}m`;
+            } else {
+              timeLeft = `${seconds}s`;
+            }
+
             return {
               canRedeem: false,
-              reason: `On cooldown for ${minutesLeft} more minute(s)`
+              reason: `On cooldown for ${timeLeft}`
             };
           }
         }
       }
 
       // Check global cooldown
-      if (item.global_cooldown_minutes > 0) {
+      if (item.global_cooldown_seconds > 0) {
         const globalCooldownResult = await db.query(
           'SELECT can_redeem_at FROM global_item_cooldowns WHERE shop_item_id = $1',
           [itemId]
@@ -130,10 +142,22 @@ class ShopService {
           const now = new Date();
 
           if (now < canRedeemAt) {
-            const minutesLeft = Math.ceil((canRedeemAt - now) / 1000 / 60);
+            const secondsLeft = Math.ceil((canRedeemAt - now) / 1000);
+            const minutes = Math.floor(secondsLeft / 60);
+            const seconds = secondsLeft % 60;
+
+            let timeLeft = '';
+            if (minutes > 0 && seconds > 0) {
+              timeLeft = `${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+              timeLeft = `${minutes}m`;
+            } else {
+              timeLeft = `${seconds}s`;
+            }
+
             return {
               canRedeem: false,
-              reason: `Global cooldown active for ${minutesLeft} more minute(s)`
+              reason: `Global cooldown active for ${timeLeft}`
             };
           }
         }
@@ -199,8 +223,8 @@ class ShopService {
         const redemptionId = redemptionResult.rows[0].id;
 
         // Set user cooldown if applicable
-        if (item.cooldown_minutes > 0) {
-          const canRedeemAt = new Date(Date.now() + item.cooldown_minutes * 60000);
+        if (item.cooldown_seconds > 0) {
+          const canRedeemAt = new Date(Date.now() + item.cooldown_seconds * 1000);
           await db.query(
             `INSERT INTO user_item_cooldowns (user_id, shop_item_id, can_redeem_at)
              VALUES ($1, $2, $3)
@@ -211,8 +235,8 @@ class ShopService {
         }
 
         // Set global cooldown if applicable
-        if (item.global_cooldown_minutes > 0) {
-          const canRedeemAt = new Date(Date.now() + item.global_cooldown_minutes * 60000);
+        if (item.global_cooldown_seconds > 0) {
+          const canRedeemAt = new Date(Date.now() + item.global_cooldown_seconds * 1000);
           await db.query(
             `INSERT INTO global_item_cooldowns (shop_item_id, can_redeem_at)
              VALUES ($1, $2)

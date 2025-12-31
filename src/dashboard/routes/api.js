@@ -557,21 +557,21 @@ router.post('/admin/shop/items', async (req, res) => {
   try {
     const {
       name, description, cost, currency_type, category,
-      icon_url, stock, enabled, cooldown_minutes, global_cooldown_minutes,
+      icon_url, stock, enabled, cooldown_seconds, global_cooldown_seconds,
       requires_input, input_prompt, auto_fulfill
     } = req.body;
 
     const result = await db.query(`
       INSERT INTO shop_items
       (name, description, cost, currency_type, category, icon_url, stock,
-       enabled, cooldown_minutes, global_cooldown_minutes, requires_input,
+       enabled, cooldown_seconds, global_cooldown_seconds, requires_input,
        input_prompt, auto_fulfill)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `, [
       name, description || null, cost, currency_type || 'regular',
       category || 'other', icon_url || null, stock || -1,
-      enabled !== false, cooldown_minutes || 0, global_cooldown_minutes || 0,
+      enabled !== false, cooldown_seconds || 0, global_cooldown_seconds || 0,
       requires_input || false, input_prompt || null, auto_fulfill || false
     ]);
 
@@ -588,7 +588,7 @@ router.put('/admin/shop/items/:id', async (req, res) => {
     const { id } = req.params;
     const {
       name, description, cost, currency_type, category,
-      icon_url, stock, enabled, cooldown_minutes, global_cooldown_minutes,
+      icon_url, stock, enabled, cooldown_seconds, global_cooldown_seconds,
       requires_input, input_prompt, auto_fulfill
     } = req.body;
 
@@ -602,8 +602,8 @@ router.put('/admin/shop/items/:id', async (req, res) => {
           icon_url = COALESCE($6, icon_url),
           stock = COALESCE($7, stock),
           enabled = COALESCE($8, enabled),
-          cooldown_minutes = COALESCE($9, cooldown_minutes),
-          global_cooldown_minutes = COALESCE($10, global_cooldown_minutes),
+          cooldown_seconds = COALESCE($9, cooldown_seconds),
+          global_cooldown_seconds = COALESCE($10, global_cooldown_seconds),
           requires_input = COALESCE($11, requires_input),
           input_prompt = COALESCE($12, input_prompt),
           auto_fulfill = COALESCE($13, auto_fulfill)
@@ -611,7 +611,7 @@ router.put('/admin/shop/items/:id', async (req, res) => {
       RETURNING *
     `, [
       name, description, cost, currency_type, category, icon_url, stock,
-      enabled, cooldown_minutes, global_cooldown_minutes,
+      enabled, cooldown_seconds, global_cooldown_seconds,
       requires_input, input_prompt, auto_fulfill, id
     ]);
 
@@ -804,7 +804,7 @@ router.post('/admin/shop', async (req, res) => {
       icon_url,
       stock,
       enabled,
-      cooldown_minutes,
+      cooldown_seconds,
       requires_input,
       input_prompt,
       auto_fulfill
@@ -813,12 +813,12 @@ router.post('/admin/shop', async (req, res) => {
     const result = await db.query(`
       INSERT INTO shop_items (
         name, description, cost, currency_type, category, icon_url,
-        stock, enabled, cooldown_minutes, requires_input, input_prompt, auto_fulfill
+        stock, enabled, cooldown_seconds, requires_input, input_prompt, auto_fulfill
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `, [
       name, description, cost, currency_type, category, icon_url,
-      stock, enabled, cooldown_minutes, requires_input, input_prompt, auto_fulfill
+      stock, enabled, cooldown_seconds, requires_input, input_prompt, auto_fulfill
     ]);
 
     res.json({ success: true, item: result.rows[0] });
@@ -848,7 +848,7 @@ router.put('/admin/shop/:id', async (req, res) => {
       icon_url,
       stock,
       enabled,
-      cooldown_minutes,
+      cooldown_seconds,
       requires_input,
       input_prompt,
       auto_fulfill
@@ -858,13 +858,13 @@ router.put('/admin/shop/:id', async (req, res) => {
       UPDATE shop_items
       SET name = $1, description = $2, cost = $3, currency_type = $4,
           category = $5, icon_url = $6, stock = $7, enabled = $8,
-          cooldown_minutes = $9, requires_input = $10, input_prompt = $11,
+          cooldown_seconds = $9, requires_input = $10, input_prompt = $11,
           auto_fulfill = $12, updated_at = CURRENT_TIMESTAMP
       WHERE id = $13
       RETURNING *
     `, [
       name, description, cost, currency_type, category, icon_url,
-      stock, enabled, cooldown_minutes, requires_input, input_prompt,
+      stock, enabled, cooldown_seconds, requires_input, input_prompt,
       auto_fulfill, id
     ]);
 
