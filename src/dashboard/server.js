@@ -6,18 +6,43 @@ const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
 const cors = require('cors');
 const Logger = require('../utils/logger');
+const db = require('../database/connection');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.DASHBOARD_PORT || 3000;
 
+// Ensure SESSION_SECRET is set
+if (!process.env.SESSION_SECRET) {
+  Logger.warn('⚠️  SESSION_SECRET not set! Add SESSION_SECRET to your .env file');
+}
+
+// Session store setup - try PostgreSQL, fallback to memory
+let sessionStore;
+try {
+  const pgSession = require('connect-pg-simple')(session);
+  sessionStore = new pgSession({
+    pool: db.pool,
+    tableName: 'session',
+    createTableIfMissing: true
+  });
+  Logger.info('Using PostgreSQL session store');
+} catch (error) {
+  Logger.warn('Using memory store (install connect-pg-simple for persistent sessions)');
+  sessionStore = new session.MemoryStore();
+}
+
 // Session configuration
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
+  store: sessionStore,
+  secret: process.env.SESSION_SECRET || 'temporary-dev-secret-change-this',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
+    maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax'
   }
 }));
 
