@@ -1395,7 +1395,8 @@
         const categories = {
           xp: { title: 'XP Rewards', settings: [] },
           currency: { title: 'Currency Rewards', settings: [] },
-          limits: { title: 'Rate Limits', settings: [] }
+          limits: { title: 'Rate Limits', settings: [] },
+          notifications: { title: 'Stream Notifications', settings: [] }
         };
 
         data.settings.forEach(setting => {
@@ -1412,7 +1413,14 @@
             <div style="margin-bottom: 30px;">
               <h4 style="margin-bottom: 15px; color: #9147ff;">${category.title}</h4>
               <div style="display: grid; gap: 15px;">
-                ${category.settings.map(setting => `
+                ${category.settings.map(setting => {
+                  // Determine input type based on setting key
+                  const isTextSetting = setting.key.includes('channel_id') || setting.key.includes('message') || setting.key.includes('role_id');
+                  const inputType = isTextSetting ? 'text' : 'number';
+                  const inputWidth = isTextSetting ? '300px' : '100px';
+                  const inputAttrs = isTextSetting ? '' : 'min="0" step="1"';
+
+                  return `
                   <div style="background: #18181b; border: 1px solid #2c2c34; border-radius: 8px; padding: 15px;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                       <div style="flex: 1;">
@@ -1421,12 +1429,12 @@
                       </div>
                       <div style="display: flex; align-items: center; gap: 10px;">
                         <input
-                          type="number"
+                          type="${inputType}"
                           id="setting-${setting.key}"
                           value="${setting.value}"
-                          min="0"
-                          step="1"
-                          style="width: 100px; padding: 8px; background: #0e0e10; border: 1px solid #2c2c34; border-radius: 6px; color: #efeff1;"
+                          ${inputAttrs}
+                          placeholder="${setting.key.includes('channel_id') ? 'Right-click channel > Copy ID' : ''}"
+                          style="width: ${inputWidth}; padding: 8px; background: #0e0e10; border: 1px solid #2c2c34; border-radius: 6px; color: #efeff1;"
                         />
                         <button
                           class="btn btn-sm"
@@ -1438,7 +1446,7 @@
                       </div>
                     </div>
                   </div>
-                `).join('')}
+                `}).join('')}
               </div>
             </div>
           `;

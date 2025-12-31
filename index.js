@@ -5,6 +5,7 @@ const path = require('path');
 const Logger = require('./src/utils/logger');
 const chatTracker = require('./src/services/chatTracker');
 const voiceTracker = require('./src/services/voiceTracker');
+const streamNotifier = require('./src/services/streamNotifier');
 const levelUp = require('./src/events/levelUp');
 const achievementService = require('./src/config/achievements');
 const { startDashboard } = require('./src/dashboard/server');
@@ -124,6 +125,16 @@ client.once('clientReady', async () => {
     Logger.error('Error initializing voice tracker:', error);
   }
 
+  // Initialize stream notifier
+  try {
+    const notifierStarted = await streamNotifier.start(client);
+    if (notifierStarted) {
+      Logger.success('Stream notifications enabled');
+    }
+  } catch (error) {
+    Logger.error('Error initializing stream notifier:', error);
+  }
+
   // Start dashboard server if port is set
   if (process.env.DASHBOARD_PORT) {
     try {
@@ -157,6 +168,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 process.on('SIGINT', async () => {
   Logger.info('👋 Shutting down gracefully...');
   voiceTracker.stop();
+  streamNotifier.stop();
   await twitchBot.disconnect();
   client.destroy();
   process.exit(0);
