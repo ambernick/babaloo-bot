@@ -12,6 +12,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.DASHBOARD_PORT || 3000;
 
+// Trust Railway proxy for secure cookies
+app.set('trust proxy', 1);
+
 // Ensure SESSION_SECRET is set
 if (!process.env.SESSION_SECRET) {
   Logger.warn('⚠️  SESSION_SECRET not set! Add SESSION_SECRET to your .env file');
