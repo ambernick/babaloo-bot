@@ -391,6 +391,7 @@
     <div class="content-section">
       <div class="tabs">
         <button class="tab active" data-tab="users">User Management</button>
+        <button class="tab" data-tab="shop">Shop Management</button>
         <button class="tab" data-tab="transactions">Recent Transactions</button>
         <button class="tab" data-tab="leaderboards">Leaderboards</button>
       </div>
@@ -406,6 +407,14 @@
         </div>
         <div id="users-list" class="loading">Loading users...</div>
         <div class="pagination" id="users-pagination"></div>
+      </div>
+
+      <div id="shop-tab" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h3 style="margin: 0;">Shop Items</h3>
+          <button class="btn btn-success" onclick="openShopItemModal()">Add New Item</button>
+        </div>
+        <div id="shop-items-list" class="loading">Loading shop items...</div>
       </div>
 
       <div id="transactions-tab" class="tab-content">
@@ -535,6 +544,82 @@
     </div>
   </div>
 
+  <!-- Shop Item Modal -->
+  <div id="shop-item-modal" class="modal">
+    <div class="modal-content">
+      <h3 id="shop-modal-title">Add New Shop Item</h3>
+      <form id="shop-item-form">
+        <input type="hidden" id="shop-item-id">
+        <div class="form-group">
+          <label>Item Name *</label>
+          <input type="text" id="shop-item-name" required placeholder="e.g., Hydrate">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="shop-item-description" rows="3" placeholder="What does this reward do?"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Icon/Emoji</label>
+          <input type="text" id="shop-item-icon" placeholder="e.g., 💧" maxlength="10">
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="shop-item-category">
+            <option value="action">Action</option>
+            <option value="cosmetic">Cosmetic</option>
+            <option value="physical">Physical</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Currency Type</label>
+          <select id="shop-item-currency">
+            <option value="regular">Regular (🪙 Coins)</option>
+            <option value="premium">Premium (💎 Gems)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Cost *</label>
+          <input type="number" id="shop-item-cost" required min="1" placeholder="How much does it cost?">
+        </div>
+        <div class="form-group">
+          <label>Stock (-1 for unlimited)</label>
+          <input type="number" id="shop-item-stock" value="-1" placeholder="-1 for unlimited">
+        </div>
+        <div class="form-group">
+          <label>Cooldown (minutes, per user)</label>
+          <input type="number" id="shop-item-cooldown" value="0" min="0" placeholder="0 for no cooldown">
+        </div>
+        <div class="form-group">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="shop-item-requires-input" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+            <span>Requires user input (e.g., custom message)</span>
+          </label>
+        </div>
+        <div class="form-group" id="input-prompt-group" style="display: none;">
+          <label>Input Prompt</label>
+          <input type="text" id="shop-item-input-prompt" placeholder="e.g., Enter your message...">
+        </div>
+        <div class="form-group">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="shop-item-auto-fulfill" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+            <span>Auto-fulfill (no manual review needed)</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="shop-item-enabled" checked style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+            <span>Enabled (visible in shop)</span>
+          </label>
+        </div>
+        <div class="action-buttons">
+          <button type="submit" class="btn btn-success">Save Item</button>
+          <button type="button" class="btn" onclick="closeShopItemModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     let currentPage = 1;
     const USERS_PER_PAGE = 25;
@@ -555,6 +640,9 @@
         // Load data for tab if needed
         if (tabName === 'transactions' && !document.getElementById('transactions-list').dataset.loaded) {
           loadRecentTransactions();
+        }
+        if (tabName === 'shop' && !document.getElementById('shop-items-list').dataset.loaded) {
+          loadShopItems();
         }
       });
     });
@@ -972,6 +1060,181 @@
       console.log('View user:', discordId);
     }
 
+    // Shop Management Functions
+    async function loadShopItems() {
+      const container = document.getElementById('shop-items-list');
+      container.dataset.loaded = 'true';
+
+      try {
+        const response = await fetch('/api/admin/shop');
+        const data = await response.json();
+
+        if (!data.success || data.items.length === 0) {
+          container.innerHTML = '<p>No shop items found. Click "Add New Item" to create one!</p>';
+          return;
+        }
+
+        const table = `
+          <table>
+            <thead>
+              <tr>
+                <th>Icon</th>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Cost</th>
+                <th>Category</th>
+                <th>Stock</th>
+                <th>Cooldown</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.items.map(item => `
+                <tr>
+                  <td style="font-size: 24px;">${item.icon_url || '📦'}</td>
+                  <td><strong>${item.name}</strong></td>
+                  <td>${item.description || '-'}</td>
+                  <td>${item.cost} ${item.currency_type === 'regular' ? '🪙' : '💎'}</td>
+                  <td>${item.category}</td>
+                  <td>${item.stock === -1 ? '∞' : item.stock}</td>
+                  <td>${item.cooldown_minutes}m</td>
+                  <td>${item.enabled ? '<span style="color: green;">✓ Enabled</span>' : '<span style="color: red;">✗ Disabled</span>'}</td>
+                  <td>
+                    <button class="btn btn-sm" onclick='editShopItem(${JSON.stringify(item)})'>Edit</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteShopItem(${item.id}, '${item.name}')">Delete</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+
+        container.innerHTML = table;
+      } catch (error) {
+        console.error('Error loading shop items:', error);
+        container.innerHTML = '<p style="color: red;">Error loading shop items</p>';
+      }
+    }
+
+    function openShopItemModal(item = null) {
+      const modal = document.getElementById('shop-item-modal');
+      const title = document.getElementById('shop-modal-title');
+
+      if (item) {
+        title.textContent = 'Edit Shop Item';
+        document.getElementById('shop-item-id').value = item.id;
+        document.getElementById('shop-item-name').value = item.name;
+        document.getElementById('shop-item-description').value = item.description || '';
+        document.getElementById('shop-item-icon').value = item.icon_url || '';
+        document.getElementById('shop-item-category').value = item.category;
+        document.getElementById('shop-item-currency').value = item.currency_type;
+        document.getElementById('shop-item-cost').value = item.cost;
+        document.getElementById('shop-item-stock').value = item.stock;
+        document.getElementById('shop-item-cooldown').value = item.cooldown_minutes;
+        document.getElementById('shop-item-requires-input').checked = item.requires_input;
+        document.getElementById('shop-item-input-prompt').value = item.input_prompt || '';
+        document.getElementById('shop-item-auto-fulfill').checked = item.auto_fulfill;
+        document.getElementById('shop-item-enabled').checked = item.enabled;
+
+        if (item.requires_input) {
+          document.getElementById('input-prompt-group').style.display = 'block';
+        }
+      } else {
+        title.textContent = 'Add New Shop Item';
+        document.getElementById('shop-item-form').reset();
+        document.getElementById('shop-item-id').value = '';
+        document.getElementById('shop-item-enabled').checked = true;
+      }
+
+      modal.classList.add('active');
+    }
+
+    function closeShopItemModal() {
+      document.getElementById('shop-item-modal').classList.remove('active');
+      document.getElementById('shop-item-form').reset();
+      document.getElementById('input-prompt-group').style.display = 'none';
+    }
+
+    function editShopItem(item) {
+      openShopItemModal(item);
+    }
+
+    async function deleteShopItem(itemId, itemName) {
+      if (!confirm(`Are you sure you want to delete "${itemName}"? This cannot be undone!`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/admin/shop/${itemId}`, {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert('Shop item deleted successfully!', 'success');
+          loadShopItems();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to delete item'), 'error');
+        }
+      } catch (error) {
+        console.error('Error deleting shop item:', error);
+        showAlert('Error deleting shop item', 'error');
+      }
+    }
+
+    // Toggle input prompt visibility
+    document.getElementById('shop-item-requires-input').addEventListener('change', (e) => {
+      const inputPromptGroup = document.getElementById('input-prompt-group');
+      inputPromptGroup.style.display = e.target.checked ? 'block' : 'none';
+    });
+
+    // Shop item form submission
+    document.getElementById('shop-item-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const itemId = document.getElementById('shop-item-id').value;
+      const itemData = {
+        name: document.getElementById('shop-item-name').value,
+        description: document.getElementById('shop-item-description').value,
+        icon_url: document.getElementById('shop-item-icon').value,
+        category: document.getElementById('shop-item-category').value,
+        currency_type: document.getElementById('shop-item-currency').value,
+        cost: parseInt(document.getElementById('shop-item-cost').value),
+        stock: parseInt(document.getElementById('shop-item-stock').value),
+        cooldown_minutes: parseInt(document.getElementById('shop-item-cooldown').value),
+        requires_input: document.getElementById('shop-item-requires-input').checked,
+        input_prompt: document.getElementById('shop-item-input-prompt').value,
+        auto_fulfill: document.getElementById('shop-item-auto-fulfill').checked,
+        enabled: document.getElementById('shop-item-enabled').checked
+      };
+
+      try {
+        const url = itemId ? `/api/admin/shop/${itemId}` : '/api/admin/shop';
+        const method = itemId ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(itemData)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert(`Shop item ${itemId ? 'updated' : 'created'} successfully!`, 'success');
+          closeShopItemModal();
+          loadShopItems();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to save item'), 'error');
+        }
+      } catch (error) {
+        console.error('Error saving shop item:', error);
+        showAlert('Error saving shop item', 'error');
+      }
+    });
+
     // Initialize
     loadStats();
     loadUsers(1);
@@ -992,6 +1255,12 @@
     document.getElementById('reset-modal').addEventListener('click', (e) => {
       if (e.target === e.currentTarget) {
         closeResetModal();
+      }
+    });
+
+    document.getElementById('shop-item-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        closeShopItemModal();
       }
     });
   </script>

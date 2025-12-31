@@ -729,4 +729,147 @@ router.post('/admin/shop/redemptions/:id/refund', async (req, res) => {
   }
 });
 
+// Shop Admin Endpoints
+
+/**
+ * GET /api/admin/shop
+ * Get all shop items (including disabled ones)
+ */
+router.get('/admin/shop', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const result = await db.query(`
+      SELECT * FROM shop_items
+      ORDER BY category, cost ASC
+    `);
+
+    res.json({ success: true, items: result.rows });
+  } catch (error) {
+    console.error('Error getting shop items:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/shop
+ * Create a new shop item
+ */
+router.post('/admin/shop', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const {
+      name,
+      description,
+      cost,
+      currency_type,
+      category,
+      icon_url,
+      stock,
+      enabled,
+      cooldown_minutes,
+      requires_input,
+      input_prompt,
+      auto_fulfill
+    } = req.body;
+
+    const result = await db.query(`
+      INSERT INTO shop_items (
+        name, description, cost, currency_type, category, icon_url,
+        stock, enabled, cooldown_minutes, requires_input, input_prompt, auto_fulfill
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING *
+    `, [
+      name, description, cost, currency_type, category, icon_url,
+      stock, enabled, cooldown_minutes, requires_input, input_prompt, auto_fulfill
+    ]);
+
+    res.json({ success: true, item: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating shop item:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/shop/:id
+ * Update a shop item
+ */
+router.put('/admin/shop/:id', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      description,
+      cost,
+      currency_type,
+      category,
+      icon_url,
+      stock,
+      enabled,
+      cooldown_minutes,
+      requires_input,
+      input_prompt,
+      auto_fulfill
+    } = req.body;
+
+    const result = await db.query(`
+      UPDATE shop_items
+      SET name = $1, description = $2, cost = $3, currency_type = $4,
+          category = $5, icon_url = $6, stock = $7, enabled = $8,
+          cooldown_minutes = $9, requires_input = $10, input_prompt = $11,
+          auto_fulfill = $12, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $13
+      RETURNING *
+    `, [
+      name, description, cost, currency_type, category, icon_url,
+      stock, enabled, cooldown_minutes, requires_input, input_prompt,
+      auto_fulfill, id
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Item not found' });
+    }
+
+    res.json({ success: true, item: result.rows[0] });
+  } catch (error) {
+    console.error('Error updating shop item:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/shop/:id
+ * Delete a shop item
+ */
+router.delete('/admin/shop/:id', async (req, res) => {
+  if (req.user.id !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+
+  try {
+    const { id } = req.params;
+
+    const result = await db.query('DELETE FROM shop_items WHERE id = $1', [id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, error: 'Item not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting shop item:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
