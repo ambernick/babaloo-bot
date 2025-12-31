@@ -214,7 +214,17 @@ class StreamNotifier {
         }
       }
     } catch (error) {
-      Logger.error('Error checking stream status:', error);
+      // If table doesn't exist, log once and disable checking
+      if (error.code === '42P01') {
+        Logger.warn('stream_notifiers table does not exist. Run migration script: node scripts/add-stream-notifier-table.js');
+        // Stop the interval to prevent repeated errors
+        if (this.checkInterval) {
+          clearInterval(this.checkInterval);
+          this.checkInterval = null;
+        }
+      } else {
+        Logger.error('Error checking stream status:', error);
+      }
     }
   }
 
