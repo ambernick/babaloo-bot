@@ -1022,6 +1022,9 @@ router.post('/admin/stream-notifiers', ensureAdmin, async (req, res) => {
 
     res.json({ success: true, notifier: result.rows[0] });
   } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(400).json({ success: false, error: 'Table not found. Run migration first.' });
+    }
     if (error.code === '23505') { // Unique violation
       return res.status(400).json({ success: false, error: 'This Twitch username is already added' });
     }
@@ -1057,6 +1060,9 @@ router.put('/admin/stream-notifiers/:id', ensureAdmin, async (req, res) => {
 
     res.json({ success: true, notifier: result.rows[0] });
   } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(400).json({ success: false, error: 'Table not found. Run migration first.' });
+    }
     console.error('Error updating stream notifier:', error);
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1079,6 +1085,9 @@ router.delete('/admin/stream-notifiers/:id', ensureAdmin, async (req, res) => {
 
     res.json({ success: true, notifier: result.rows[0] });
   } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(400).json({ success: false, error: 'Table not found. Run migration first.' });
+    }
     console.error('Error deleting stream notifier:', error);
     res.status(500).json({ success: false, error: error.message });
   }
