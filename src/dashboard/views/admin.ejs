@@ -425,6 +425,12 @@
         <div id="settings-list" class="loading">Loading settings...</div>
       </div>
 
+      <div id="command-settings-tab" class="tab-content">
+        <h3 style="margin-bottom: 20px;">Command Settings</h3>
+        <p style="color: #666; margin-bottom: 20px;">Configure which commands can be used and where they can be executed.</p>
+        <div id="command-settings-list" class="loading">Loading commands...</div>
+      </div>
+
       <div id="stream-notifiers-tab" class="tab-content">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
           <h3 style="margin: 0;">Stream Notifications</h3>
@@ -715,6 +721,9 @@
         }
         if (tabName === 'settings' && !document.getElementById('settings-list').dataset.loaded) {
           loadSettings();
+        }
+        if (tabName === 'command-settings' && !document.getElementById('command-settings-list').dataset.loaded) {
+          loadCommandSettings();
         }
       });
     });
@@ -1682,6 +1691,32 @@
         showAlert('Error saving notifier', 'error');
       }
     });
+
+    // Command Settings Management Functions
+    async function loadCommandSettings() {
+      const container = document.getElementById('command-settings-list');
+      container.dataset.loaded = 'true';
+
+      try {
+        const commandsRes = await fetch('/api/admin/commands');
+        const commandsData = await commandsRes.json();
+
+        if (!commandsData.success) {
+          container.innerHTML = '<p style="color: red;">Error loading commands</p>';
+          return;
+        }
+
+        const table = '<table><thead><tr><th>Command</th><th>Category</th><th>Description</th></tr></thead><tbody>' +
+          commandsData.commands.map(cmd =>
+            '<tr><td><strong>/' + cmd.name + '</strong></td><td>' + cmd.category + '</td><td>' + cmd.description + '</td></tr>'
+          ).join('') + '</tbody></table>';
+
+        container.innerHTML = table;
+      } catch (error) {
+        console.error('Error loading command settings:', error);
+        container.innerHTML = '<p style="color: red;">Error loading command settings</p>';
+      }
+    }
 
     // Initialize
     loadStats();
