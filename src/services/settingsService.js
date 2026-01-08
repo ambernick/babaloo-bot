@@ -141,15 +141,21 @@ class SettingsService {
    * Parse setting value (convert string to appropriate type)
    */
   parseValue(value) {
-    // Try to parse as number
-    const num = Number(value);
-    if (!isNaN(num)) {
-      return num;
-    }
-
-    // Try to parse as boolean
+    // Try to parse as boolean first
     if (value === 'true') return true;
     if (value === 'false') return false;
+
+    // Check if it looks like a Discord ID (only digits and length > 15)
+    // Discord IDs are snowflakes that are too large for JavaScript numbers
+    if (/^\d+$/.test(value) && value.length > 15) {
+      return value; // Keep as string
+    }
+
+    // Try to parse as number (for config values like XP amounts)
+    const num = Number(value);
+    if (!isNaN(num) && value.trim() !== '') {
+      return num;
+    }
 
     // Return as string
     return value;
