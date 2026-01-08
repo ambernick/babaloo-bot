@@ -725,6 +725,9 @@
         if (tabName === 'command-settings' && !document.getElementById('command-settings-list').dataset.loaded) {
           loadCommandSettings();
         }
+        if (tabName === 'stream-notifiers' && !document.getElementById('stream-notifiers-list').dataset.loaded) {
+          loadStreamNotifiers();
+        }
       });
     });
 
@@ -1693,28 +1696,273 @@
     });
 
     // Command Settings Management Functions
+    let allChannels = [];
+
     async function loadCommandSettings() {
       const container = document.getElementById('command-settings-list');
       container.dataset.loaded = 'true';
 
       try {
-        const commandsRes = await fetch('/api/admin/commands');
-        const commandsData = await commandsRes.json();
+        const [commandsRes, settingsRes, channelsRes] = await Promise.all([
+          fetch('/api/admin/commands').then(r => r.json()),
+          fetch('/api/admin/command-settings').then(r => r.json()),
+          fetch('/api/admin/channels').then(r => r.json())
+        ]);
 
-        if (!commandsData.success) {
-          container.innerHTML = '<p style="color: red;">Error loading commands</p>';
+        console.log('Commands Response:', commandsRes);
+        console.log('Settings Response:', settingsRes);
+        console.log('Channels Response:', channelsRes);
+
+        if (!commandsRes.success) {
+          container.innerHTML = '<p style="color: red;">Error loading commands: ' + (commandsRes.error || 'Unknown error') + '</p>';
           return;
         }
 
-        const table = '<table><thead><tr><th>Command</th><th>Category</th><th>Description</th></tr></thead><tbody>' +
-          commandsData.commands.map(cmd =>
-            '<tr><td><strong>/' + cmd.name + '</strong></td><td>' + cmd.category + '</td><td>' + cmd.description + '</td></tr>'
-          ).join('') + '</tbody></table>';
+        allChannels = channelsRes.success ? channelsRes.channels : [];
+        const settingsMap = {};
 
-        container.innerHTML = table;
+        if (settingsRes.success) {
+          settingsRes.settings.forEach(s => {
+            settingsMap[s.command_name] = s;
+          });
+        }
+
+        const html = commandsRes.commands.map(cmd => {
+          const settings = settingsMap[cmd.name];
+          const enabled = settings?.enabled === false ? false : true;
+          const useWhitelist = settings?.use_whitelist || false;
+          const allowedChannels = settings?.allowed_channel_ids || [];
+          const blockedChannels = settings?.blocked_channel_ids || [];
+
+          return `
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 2px solid ${enabled ? '#51cf66' : '#ff6b6b'};">
+              <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                <div style="flex: 1;">
+                  <h4 style="margin: 0 0 5px 0; color: #667eea;">/${cmd.name}</h4>
+                  <p style="margin: 0; color: #666; font-size: 14px;">${cmd.description}</p>
+                  <span style="display: inline-block; margin-top: 5px; padding: 3px 8px; background: #e0e0e0; border-radius: 4px; font-size: 12px;">${cmd.category}</span>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <span style="font-weight: 600; color: ${enabled ? '#51cf66' : '#ff6b6b'};">${enabled ? '✅ Enabled' : '❌ Disabled'}</span>
+                  <button class="btn btn-sm ${enabled ? 'btn-danger' : 'btn-success'}"
+                          onclick="toggleCommand('${cmd.name}', ${enabled})">
+                    ${enabled ? 'Disable' : 'Enable'}
+                  </button>
+                  ${settings ? `<button class="btn btn-sm" onclick="resetCommand('${cmd.name}')">Reset</button>` : ''}
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div>
+                  <label style="font-weight: 600; margin-bottom: 8px; display: block; color: #333;">
+                    <input type="radio" name="mode-${cmd.name}" ${!useWhitelist ? 'checked' : ''}
+                           onchange="setCommandMode('${cmd.name}', false)" style="margin-right: 5px;">
+                    Blacklist Mode (block in specific channels)
+                  </label>
+                  <div id="blacklist-${cmd.name}" style="display: ${!useWhitelist ? 'block' : 'none'};">
+                    <select id="blacklist-select-${cmd.name}" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 2px solid #e0e0e0; border-radius: 5px;">
+                      <option value="">Select a channel to block...</option>
+                      ${allChannels.map(ch => `<option value="${ch.id}">#${ch.name}</option>`).join('')}
+                    </select>
+                    <button class="btn btn-sm btn-danger" onclick="addToBlacklist('${cmd.name}')">Block Channel</button>
+                    <div id="blacklist-list-${cmd.name}" style="margin-top: 10px;">
+                      ${blockedChannels.map(chId => {
+                        const channel = allChannels.find(c => c.id === chId);
+                        return channel ? `
+                          <div style="background: white; padding: 8px; margin-bottom: 5px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>#${channel.name}</span>
+                            <button class="btn btn-sm" style="padding: 4px 8px;" onclick="removeFromBlacklist('${cmd.name}', '${chId}')">Remove</button>
+                          </div>
+                        ` : '';
+                      }).join('') || '<p style="color: #999; font-size: 13px; margin: 5px 0;">No blocked channels</p>'}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label style="font-weight: 600; margin-bottom: 8px; display: block; color: #333;">
+                    <input type="radio" name="mode-${cmd.name}" ${useWhitelist ? 'checked' : ''}
+                           onchange="setCommandMode('${cmd.name}', true)" style="margin-right: 5px;">
+                    Whitelist Mode (allow only in specific channels)
+                  </label>
+                  <div id="whitelist-${cmd.name}" style="display: ${useWhitelist ? 'block' : 'none'};">
+                    <select id="whitelist-select-${cmd.name}" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 2px solid #e0e0e0; border-radius: 5px;">
+                      <option value="">Select a channel to allow...</option>
+                      ${allChannels.map(ch => `<option value="${ch.id}">#${ch.name}</option>`).join('')}
+                    </select>
+                    <button class="btn btn-sm btn-success" onclick="addToWhitelist('${cmd.name}')">Allow Channel</button>
+                    <div id="whitelist-list-${cmd.name}" style="margin-top: 10px;">
+                      ${allowedChannels.map(chId => {
+                        const channel = allChannels.find(c => c.id === chId);
+                        return channel ? `
+                          <div style="background: white; padding: 8px; margin-bottom: 5px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>#${channel.name}</span>
+                            <button class="btn btn-sm" style="padding: 4px 8px;" onclick="removeFromWhitelist('${cmd.name}', '${chId}')">Remove</button>
+                          </div>
+                        ` : '';
+                      }).join('') || '<p style="color: #999; font-size: 13px; margin: 5px 0;">No allowed channels (command blocked everywhere)</p>'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        container.innerHTML = html;
       } catch (error) {
         console.error('Error loading command settings:', error);
         container.innerHTML = '<p style="color: red;">Error loading command settings</p>';
+      }
+    }
+
+    function setCommandMode(commandName, useWhitelist) {
+      document.getElementById(`whitelist-${commandName}`).style.display = useWhitelist ? 'block' : 'none';
+      document.getElementById(`blacklist-${commandName}`).style.display = useWhitelist ? 'none' : 'block';
+    }
+
+    async function toggleCommand(commandName, currentlyEnabled) {
+      try {
+        const endpoint = currentlyEnabled ? 'disable' : 'enable';
+        const response = await fetch(`/api/admin/command-settings/${commandName}/${endpoint}`, {
+          method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert(`Command /${commandName} ${currentlyEnabled ? 'disabled' : 'enabled'} successfully!`, 'success');
+          loadCommandSettings();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to update command'), 'error');
+        }
+      } catch (error) {
+        console.error('Error toggling command:', error);
+        showAlert('Error toggling command', 'error');
+      }
+    }
+
+    async function addToWhitelist(commandName) {
+      const select = document.getElementById(`whitelist-select-${commandName}`);
+      const channelId = select.value;
+
+      if (!channelId) {
+        showAlert('Please select a channel', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/admin/command-settings/${commandName}/whitelist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channelId })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert('Channel added to whitelist', 'success');
+          loadCommandSettings();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to add channel'), 'error');
+        }
+      } catch (error) {
+        console.error('Error adding to whitelist:', error);
+        showAlert('Error adding to whitelist', 'error');
+      }
+    }
+
+    async function removeFromWhitelist(commandName, channelId) {
+      try {
+        const response = await fetch(`/api/admin/command-settings/${commandName}/whitelist/${channelId}`, {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert('Channel removed from whitelist', 'success');
+          loadCommandSettings();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to remove channel'), 'error');
+        }
+      } catch (error) {
+        console.error('Error removing from whitelist:', error);
+        showAlert('Error removing from whitelist', 'error');
+      }
+    }
+
+    async function addToBlacklist(commandName) {
+      const select = document.getElementById(`blacklist-select-${commandName}`);
+      const channelId = select.value;
+
+      if (!channelId) {
+        showAlert('Please select a channel', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/admin/command-settings/${commandName}/blacklist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channelId })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert('Channel added to blacklist', 'success');
+          loadCommandSettings();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to add channel'), 'error');
+        }
+      } catch (error) {
+        console.error('Error adding to blacklist:', error);
+        showAlert('Error adding to blacklist', 'error');
+      }
+    }
+
+    async function removeFromBlacklist(commandName, channelId) {
+      try {
+        const response = await fetch(`/api/admin/command-settings/${commandName}/blacklist/${channelId}`, {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert('Channel removed from blacklist', 'success');
+          loadCommandSettings();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to remove channel'), 'error');
+        }
+      } catch (error) {
+        console.error('Error removing from blacklist:', error);
+        showAlert('Error removing from blacklist', 'error');
+      }
+    }
+
+    async function resetCommand(commandName) {
+      if (!confirm(`Reset /${commandName} to default settings (enabled everywhere)?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/admin/command-settings/${commandName}`, {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showAlert(`Command /${commandName} reset to defaults`, 'success');
+          loadCommandSettings();
+        } else {
+          showAlert('Error: ' + (result.error || 'Failed to reset command'), 'error');
+        }
+      } catch (error) {
+        console.error('Error resetting command:', error);
+        showAlert('Error resetting command', 'error');
       }
     }
 
