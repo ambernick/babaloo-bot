@@ -200,16 +200,28 @@ class AchievementService {
         const settings = await settingsService.getSettings(['achievement_notification_channel_id']);
         const channelId = settings.achievement_notification_channel_id;
 
+        console.log(`[Achievement] Client provided: ${!!client}, Configured channel ID: ${channelId}`);
+
         if (channelId && channelId.trim() !== '') {
-          const configuredChannel = await client.channels.fetch(channelId).catch(() => null);
+          const configuredChannel = await client.channels.fetch(channelId).catch((err) => {
+            console.error(`[Achievement] Failed to fetch channel ${channelId}:`, err.message);
+            return null;
+          });
           if (configuredChannel) {
+            console.log(`[Achievement] Using configured channel: #${configuredChannel.name} (${configuredChannel.id})`);
             targetChannel = configuredChannel;
+          } else {
+            console.log(`[Achievement] Configured channel ${channelId} not found, using default channel`);
           }
+        } else {
+          console.log('[Achievement] No channel configured, using default chat channel');
         }
       } catch (error) {
         // If there's an error fetching the configured channel, just use the default
         console.error('Error fetching achievement notification channel:', error);
       }
+    } else {
+      console.log('[Achievement] No client provided, using default channel');
     }
 
     const embed = {
