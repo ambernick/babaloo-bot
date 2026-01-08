@@ -495,47 +495,62 @@ router.post('/admin/reset-all', async (req, res) => {
   }
 
   try {
-    const { unlinkTwitch } = req.body;
+    const { unlinkTwitch, deleteUsers } = req.body;
 
-    // Reset all users to defaults
-    if (unlinkTwitch) {
-      // Reset stats AND unlink Twitch accounts
-      await db.query(`
-        UPDATE users
-        SET currency = 0,
-            premium_currency = 0,
-            xp = 0,
-            level = 1,
-            twitch_id = NULL
-      `);
+    if (deleteUsers) {
+      // Complete deletion of all users and related data
+      await db.query('DELETE FROM user_achievements');
+      await db.query('DELETE FROM transactions');
+      await db.query('DELETE FROM user_profiles');
+      await db.query('DELETE FROM users');
+
+      res.json({
+        success: true,
+        message: 'All users have been completely deleted. They will be recreated on next interaction.',
+        usersDeleted: true
+      });
     } else {
-      // Reset stats only, keep Twitch links
+      // Reset all users to defaults
+      if (unlinkTwitch) {
+        // Reset stats AND unlink Twitch accounts
+        await db.query(`
+          UPDATE users
+          SET currency = 0,
+              premium_currency = 0,
+              xp = 0,
+              level = 1,
+              twitch_id = NULL
+        `);
+      } else {
+        // Reset stats only, keep Twitch links
+        await db.query(`
+          UPDATE users
+          SET currency = 0,
+              premium_currency = 0,
+              xp = 0,
+              level = 1
+        `);
+      }
+
+      // Delete all user achievements
+      await db.query('DELETE FROM user_achievements');
+
+      // Delete all transactions
+      await db.query('DELETE FROM transactions');
+
+      // Reset user profiles
       await db.query(`
-        UPDATE users
-        SET currency = 0,
-            premium_currency = 0,
-            xp = 0,
-            level = 1
+        UPDATE user_profiles
+        SET streak_days = 0
       `);
+
+      res.json({
+        success: true,
+        message: 'All stats have been reset successfully',
+        twitchUnlinked: !!unlinkTwitch,
+        usersDeleted: false
+      });
     }
-
-    // Delete all user achievements
-    await db.query('DELETE FROM user_achievements');
-
-    // Delete all transactions
-    await db.query('DELETE FROM transactions');
-
-    // Reset user profiles
-    await db.query(`
-      UPDATE user_profiles
-      SET streak_days = 0
-    `);
-
-    res.json({
-      success: true,
-      message: 'All stats have been reset successfully',
-      twitchUnlinked: !!unlinkTwitch
-    });
   } catch (error) {
     console.error('API error:', error);
     res.status(500).json({ error: 'Server error' });
