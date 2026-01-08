@@ -224,6 +224,12 @@ class AchievementService {
       console.log('[Achievement] No client provided, using default channel');
     }
 
+    // If no target channel was found (null channel + no configured channel), skip announcement
+    if (!targetChannel) {
+      console.log('[Achievement] No channel available for announcement, skipping');
+      return;
+    }
+
     const embed = {
       color: 0xFFD700,
       title: '🏆 Achievement Unlocked!',

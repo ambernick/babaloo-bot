@@ -209,7 +209,7 @@ class UserService {
   }
 
   // Link Twitch account to Discord account (merge accounts)
-  async linkTwitchAccount(discordUserId, twitchId, twitchUsername) {
+  async linkTwitchAccount(discordUserId, twitchId, twitchUsername, client = null) {
     const achievementService = require('./achievementService');
 
     try {
@@ -287,12 +287,29 @@ class UserService {
 
           console.log(`✅ Merged Twitch account ${twitchUsername} into Discord account ${discordUser.username}`);
 
-          // Check for Link Up achievement and store as pending notification
+          // Check for Link Up achievement
           const newAchievements = await achievementService.autoCheckAchievements(discordUserId);
 
-          // Store pending notifications for any newly unlocked achievements
-          for (const ach of newAchievements) {
-            await achievementService.storePendingNotification(discordUserId, ach.id);
+          // Announce achievements immediately if client is available, otherwise store as pending
+          if (client && newAchievements.length > 0) {
+            // Fetch Discord user object for announcement
+            const discordUserObj = await client.users.fetch(discordUser.discord_id).catch(() => null);
+            if (discordUserObj) {
+              for (const ach of newAchievements) {
+                // Announce directly to achievement channel (no chat channel context)
+                await achievementService.announceAchievement(null, discordUserObj, ach, client);
+              }
+            } else {
+              // Fallback to pending notifications if can't fetch user
+              for (const ach of newAchievements) {
+                await achievementService.storePendingNotification(discordUserId, ach.id);
+              }
+            }
+          } else if (newAchievements.length > 0) {
+            // Store pending notifications for any newly unlocked achievements
+            for (const ach of newAchievements) {
+              await achievementService.storePendingNotification(discordUserId, ach.id);
+            }
           }
 
           return {
@@ -315,12 +332,29 @@ class UserService {
 
         console.log(`✅ Linked Twitch account ${twitchUsername} to Discord account ${discordUser.username}`);
 
-        // Check for Link Up achievement and store as pending notification
+        // Check for Link Up achievement
         const newAchievements = await achievementService.autoCheckAchievements(discordUserId);
 
-        // Store pending notifications for any newly unlocked achievements
-        for (const ach of newAchievements) {
-          await achievementService.storePendingNotification(discordUserId, ach.id);
+        // Announce achievements immediately if client is available, otherwise store as pending
+        if (client && newAchievements.length > 0) {
+          // Fetch Discord user object for announcement
+          const discordUserObj = await client.users.fetch(discordUser.discord_id).catch(() => null);
+          if (discordUserObj) {
+            for (const ach of newAchievements) {
+              // Announce directly to achievement channel (no chat channel context)
+              await achievementService.announceAchievement(null, discordUserObj, ach, client);
+            }
+          } else {
+            // Fallback to pending notifications if can't fetch user
+            for (const ach of newAchievements) {
+              await achievementService.storePendingNotification(discordUserId, ach.id);
+            }
+          }
+        } else if (newAchievements.length > 0) {
+          // Store pending notifications for any newly unlocked achievements
+          for (const ach of newAchievements) {
+            await achievementService.storePendingNotification(discordUserId, ach.id);
+          }
         }
 
         return { success: true, merged: false };

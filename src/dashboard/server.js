@@ -218,12 +218,16 @@ app.get('/auth/twitch/callback', async (req, res) => {
     // State contains the Discord user ID
     const discordUserId = state;
 
+    // Get Discord client for achievement notifications
+    const client = app.locals.client;
+
     // Link the accounts
     const userService = require('../services/userService');
     const linkResult = await userService.linkTwitchAccount(
       parseInt(discordUserId),
       twitchId,
-      twitchUsername
+      twitchUsername,
+      client
     );
 
     if (linkResult.success) {
