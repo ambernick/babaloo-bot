@@ -123,9 +123,9 @@ class CommandSettingsService {
          ON CONFLICT (command_name)
          DO UPDATE SET
            enabled = COALESCE($2, command_settings.enabled),
-           allowed_channel_ids = COALESCE($3, command_settings.allowed_channel_ids),
+           allowed_channel_ids = CASE WHEN $3 IS NOT NULL THEN $3 ELSE command_settings.allowed_channel_ids END,
            use_whitelist = COALESCE($4, command_settings.use_whitelist),
-           blocked_channel_ids = COALESCE($5, command_settings.blocked_channel_ids),
+           blocked_channel_ids = CASE WHEN $5 IS NOT NULL THEN $5 ELSE command_settings.blocked_channel_ids END,
            admin_only = COALESCE($6, command_settings.admin_only)
          RETURNING *`,
         [
