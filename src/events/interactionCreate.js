@@ -1,9 +1,10 @@
 // src/events/interactionCreate.js
 const Logger = require('../utils/logger');
+const commandSettingsService = require('../services/commandSettingsService');
 
 module.exports = {
   name: 'interactionCreate',
-  
+
   async execute(interaction, client) {
     // Handle slash commands
     if (interaction.isChatInputCommand()) {
@@ -12,6 +13,20 @@ module.exports = {
       if (!command) {
         Logger.warn(`No command matching ${interaction.commandName} was found.`);
         return;
+      }
+
+      // Check command permissions
+      const permissionCheck = await commandSettingsService.canExecuteCommand(
+        interaction.commandName,
+        interaction.channelId,
+        interaction.user.id
+      );
+
+      if (!permissionCheck.allowed) {
+        return interaction.reply({
+          content: `❌ ${permissionCheck.reason}`,
+          ephemeral: true
+        });
       }
 
       try {
