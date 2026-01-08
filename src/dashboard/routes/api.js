@@ -1101,4 +1101,255 @@ router.delete('/admin/stream-notifiers/:id', ensureAdmin, async (req, res) => {
   }
 });
 
+// ============================================
+// Command Settings Management (Admin Only)
+// ============================================
+
+const commandSettingsService = require('../../services/commandSettingsService');
+
+// Get all command settings
+router.get('/admin/command-settings', ensureAdmin, async (req, res) => {
+  try {
+    const result = await commandSettingsService.getAllCommandSettings();
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, settings: result.settings });
+  } catch (error) {
+    console.error('Error getting command settings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get available Discord channels (for whitelist/blacklist selection)
+router.get('/admin/channels', ensureAdmin, async (req, res) => {
+  try {
+    // Get the Discord client from the app locals (set in server.js)
+    const client = req.app.locals.client;
+
+    if (!client) {
+      return res.status(500).json({ success: false, error: 'Discord client not available' });
+    }
+
+    const guild = client.guilds.cache.get(process.env.GUILD_ID);
+
+    if (!guild) {
+      return res.status(500).json({ success: false, error: 'Guild not found' });
+    }
+
+    // Get text channels only
+    const channels = guild.channels.cache
+      .filter(channel => channel.type === 0) // 0 = GUILD_TEXT
+      .map(channel => ({
+        id: channel.id,
+        name: channel.name,
+        position: channel.position
+      }))
+      .sort((a, b) => a.position - b.position);
+
+    res.json({ success: true, channels });
+  } catch (error) {
+    console.error('Error getting channels:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get available commands
+router.get('/admin/commands', ensureAdmin, async (req, res) => {
+  try {
+    // Get the Discord client from app locals
+    const client = req.app.locals.client;
+
+    if (!client || !client.commands) {
+      return res.status(500).json({ success: false, error: 'Discord client not available' });
+    }
+
+    const commands = Array.from(client.commands.values()).map(cmd => ({
+      name: cmd.data.name,
+      description: cmd.data.description,
+      category: cmd.category || 'general'
+    }));
+
+    res.json({ success: true, commands });
+  } catch (error) {
+    console.error('Error getting commands:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get settings for a specific command
+router.get('/admin/command-settings/:commandName', ensureAdmin, async (req, res) => {
+  try {
+    const { commandName } = req.params;
+    const result = await commandSettingsService.getCommandSettings(commandName);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, settings: result.settings });
+  } catch (error) {
+    console.error('Error getting command settings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update command settings
+router.put('/admin/command-settings/:commandName', ensureAdmin, async (req, res) => {
+  try {
+    const { commandName } = req.params;
+    const { enabled, use_whitelist, allowed_channel_ids, blocked_channel_ids, admin_only } = req.body;
+
+    const result = await commandSettingsService.updateCommandSettings(commandName, {
+      enabled,
+      use_whitelist,
+      allowed_channel_ids,
+      blocked_channel_ids,
+      admin_only
+    });
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, settings: result.settings });
+  } catch (error) {
+    console.error('Error updating command settings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Enable command
+router.post('/admin/command-settings/:commandName/enable', ensureAdmin, async (req, res) => {
+  try {
+    const { commandName } = req.params;
+    const result = await commandSettingsService.enableCommand(commandName);
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, settings: result.settings });
+  } catch (error) {
+    console.error('Error enabling command:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Disable command
+router.post('/admin/command-settings/:commandName/disable', ensureAdmin, async (req, res) => {
+  try {
+    const { commandName } = req.params;
+    const result = await commandSettingsService.disableCommand(commandName);
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, settings: result.settings });
+  } catch (error) {
+    console.error('Error disabling command:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Add channel to whitelist
+router.post('/admin/command-settings/:commandName/whitelist', ensureAdmin, async (req, res) => {
+  try {
+    const { commandName } = req.params;
+    const { channelId } = req.body;
+
+    if (!channelId) {
+      return res.status(400).json({ success: false, error: 'Channel ID is required' });
+    }
+
+    const result = await commandSettingsService.addToWhitelist(commandName, channelId);
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, settings: result.settings });
+  } catch (error) {
+    console.error('Error adding to whitelist:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Remove channel from whitelist
+router.delete('/admin/command-settings/:commandName/whitelist/:channelId', ensureAdmin, async (req, res) => {
+  try {
+    const { commandName, channelId } = req.params;
+    const result = await commandSettingsService.removeFromWhitelist(commandName, channelId);
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, settings: result.settings });
+  } catch (error) {
+    console.error('Error removing from whitelist:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Add channel to blacklist
+router.post('/admin/command-settings/:commandName/blacklist', ensureAdmin, async (req, res) => {
+  try {
+    const { commandName } = req.params;
+    const { channelId } = req.body;
+
+    if (!channelId) {
+      return res.status(400).json({ success: false, error: 'Channel ID is required' });
+    }
+
+    const result = await commandSettingsService.addToBlacklist(commandName, channelId);
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, settings: result.settings });
+  } catch (error) {
+    console.error('Error adding to blacklist:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Remove channel from blacklist
+router.delete('/admin/command-settings/:commandName/blacklist/:channelId', ensureAdmin, async (req, res) => {
+  try {
+    const { commandName, channelId } = req.params;
+    const result = await commandSettingsService.removeFromBlacklist(commandName, channelId);
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, settings: result.settings });
+  } catch (error) {
+    console.error('Error removing from blacklist:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Reset command settings
+router.delete('/admin/command-settings/:commandName', ensureAdmin, async (req, res) => {
+  try {
+    const { commandName } = req.params;
+    const result = await commandSettingsService.deleteCommandSettings(commandName);
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, message: 'Command settings reset successfully' });
+  } catch (error) {
+    console.error('Error resetting command settings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
