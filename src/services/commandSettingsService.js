@@ -20,8 +20,8 @@ class CommandSettingsService {
 
       const settings = result.rows[0];
 
-      // Check if command is globally disabled
-      if (!settings.enabled) {
+      // Check if command is globally disabled (null = enabled by default)
+      if (settings.enabled === false) {
         return {
           allowed: false,
           reason: 'This command is currently disabled.'
