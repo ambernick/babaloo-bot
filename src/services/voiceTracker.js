@@ -179,7 +179,7 @@ class VoiceTracker {
 
                       if (newAchievements && newAchievements.length > 0) {
                         for (const ach of newAchievements) {
-                          await achievementService.announceAchievement(textChannel, member.user, ach);
+                          await achievementService.announceAchievement(textChannel, member.user, ach, this.client);
                         }
                       }
                     }

@@ -100,6 +100,28 @@ class SettingsService {
   }
 
   /**
+   * Set a setting value
+   */
+  async setSetting(key, value) {
+    try {
+      await db.query(
+        `UPDATE bot_settings
+         SET value = $1, updated_at = CURRENT_TIMESTAMP
+         WHERE key = $2`,
+        [value, key]
+      );
+
+      // Invalidate cache
+      this.invalidateCache();
+
+      return { success: true };
+    } catch (error) {
+      console.error(`Error setting ${key}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Invalidate cache (call this when settings are updated)
    */
   invalidateCache() {

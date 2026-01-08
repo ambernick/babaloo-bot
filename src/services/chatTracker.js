@@ -35,7 +35,7 @@ class ChatTracker {
       // Announce pending achievements if any
       if (pendingAchievements && pendingAchievements.length > 0) {
         for (const ach of pendingAchievements) {
-          await achievementService.announceAchievement(message.channel, message.author, ach);
+          await achievementService.announceAchievement(message.channel, message.author, ach, message.client);
         }
       }
 
@@ -107,18 +107,18 @@ class ChatTracker {
         // Announce any new achievements
         if (newAchievements && newAchievements.length > 0) {
           for (const ach of newAchievements) {
-            await achievementService.announceAchievement(message.channel, message.author, ach);
+            await achievementService.announceAchievement(message.channel, message.author, ach, message.client);
           }
         }
       } else {
         // Still check achievements even without level-up (for message-count achievements)
         const achievementService = require('./achievementService');
         const newAchievements = await achievementService.autoCheckAchievements(user.id);
-        
+
         // Only announce if there are new achievements
         if (newAchievements && newAchievements.length > 0) {
           for (const ach of newAchievements) {
-            await achievementService.announceAchievement(message.channel, message.author, ach);
+            await achievementService.announceAchievement(message.channel, message.author, ach, message.client);
           }
         }
       }

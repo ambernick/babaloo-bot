@@ -177,8 +177,12 @@ class AchievementService {
 
   /**
    * Announce achievement unlock in channel
+   * @param {Channel} channel - The channel where the achievement was earned (fallback)
+   * @param {User} user - The user who earned the achievement
+   * @param {Object} achievement - The achievement data
+   * @param {Client} client - Discord client (optional, for fetching configured channel)
    */
-  async announceAchievement(channel, user, achievement) {
+  async announceAchievement(channel, user, achievement, client = null) {
     const rarityEmoji = {
       common: '⚪',
       uncommon: '🟢',
@@ -186,6 +190,27 @@ class AchievementService {
       epic: '🟣',
       legendary: '🟠'
     };
+
+    // Check if there's a configured achievement notification channel
+    let targetChannel = channel; // Default to the current channel
+
+    if (client) {
+      try {
+        const settingsService = require('./settingsService');
+        const settings = await settingsService.getSettings(['achievement_notification_channel_id']);
+        const channelId = settings.achievement_notification_channel_id;
+
+        if (channelId && channelId.trim() !== '') {
+          const configuredChannel = await client.channels.fetch(channelId).catch(() => null);
+          if (configuredChannel) {
+            targetChannel = configuredChannel;
+          }
+        }
+      } catch (error) {
+        // If there's an error fetching the configured channel, just use the default
+        console.error('Error fetching achievement notification channel:', error);
+      }
+    }
 
     const embed = {
       color: 0xFFD700,
@@ -212,7 +237,7 @@ class AchievementService {
       timestamp: new Date()
     };
 
-    await channel.send({ embeds: [embed] });
+    await targetChannel.send({ embeds: [embed] });
   }
 
   formatRewards(achievement) {
