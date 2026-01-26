@@ -20,6 +20,7 @@ async function addBotSettings() {
     console.log('✅ Default settings inserted!');
     console.log('\n📋 Default settings added:');
     console.log('  - achievement_notification_channel_id (empty - will send to chat channel)');
+    console.log('  - levelup_notification_channel_id (empty - will send to chat channel)');
     console.log('  - stream_notification_channel_id');
     console.log('  - stream_notification_message');
     console.log('  - stream_notification_role_id');

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS bot_settings (
 -- Insert default settings
 INSERT INTO bot_settings (key, value, description, category) VALUES
   ('achievement_notification_channel_id', '', 'Channel ID where achievement notifications are sent (leave empty to send in chat channel)', 'notifications'),
+  ('levelup_notification_channel_id', '', 'Channel ID where level up notifications are sent (leave empty to send in chat channel)', 'notifications'),
   ('stream_notification_channel_id', '', 'Channel ID where stream live notifications are sent', 'notifications'),
   ('stream_notification_message', '@everyone 🔴 **{username} is now LIVE!**', 'Default message for stream notifications. Placeholders: {username}, {title}, {game}, {url}', 'notifications'),
   ('stream_notification_role_id', 'everyone', 'Role ID to mention for stream notifications (use "everyone" for @everyone)', 'notifications'),
