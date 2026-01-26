@@ -77,7 +77,8 @@ class ChatTracker {
           message.channel,
           message.author,
           xpResult.oldLevel,
-          xpResult.newLevel
+          xpResult.newLevel,
+          message.client
         );
         
         // Award level-up rewards

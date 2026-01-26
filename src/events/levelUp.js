@@ -3,23 +3,70 @@ const config = require('../config/config');
 
 module.exports = {
   name: 'levelUp',
-  
+
   /**
    * Enhanced level-up announcement with rewards and unlocks
    * Call this from chatTracker when user levels up
+   * @param {Channel} channel - The channel where the level up was earned (fallback)
+   * @param {User} user - The user who leveled up
+   * @param {number} oldLevel - Previous level
+   * @param {number} newLevel - New level
+   * @param {Client} client - Discord client (optional, for fetching configured channel)
    */
-  async announce(channel, user, oldLevel, newLevel) {
+  async announce(channel, user, oldLevel, newLevel, client = null) {
+    // Check if there's a configured level up notification channel
+    let targetChannel = channel; // Default to the current channel
+
+    if (client) {
+      try {
+        const settingsService = require('../services/settingsService');
+        const settings = await settingsService.getSettings(['levelup_notification_channel_id']);
+        const channelId = settings.levelup_notification_channel_id;
+
+        console.log(`[LevelUp] Client provided: ${!!client}, Configured channel ID: ${channelId}`);
+
+        if (channelId && channelId.trim() !== '') {
+          const configuredChannel = await client.channels.fetch(channelId).catch((err) => {
+            console.error(`[LevelUp] Failed to fetch channel ${channelId}:`, err.message);
+            return null;
+          });
+          if (configuredChannel) {
+            console.log(`[LevelUp] Using configured channel: #${configuredChannel.name} (${configuredChannel.id})`);
+            targetChannel = configuredChannel;
+          } else {
+            console.log(`[LevelUp] Configured channel ${channelId} not found, using default channel`);
+          }
+        } else {
+          console.log('[LevelUp] No channel configured, using default chat channel');
+        }
+      } catch (error) {
+        // If there's an error fetching the configured channel, just use the default
+        console.error('Error fetching level up notification channel:', error);
+      }
+    } else {
+      console.log('[LevelUp] No client provided, using default channel');
+    }
+
+    // If no target channel was found (null channel + no configured channel), skip announcement
+    if (!targetChannel) {
+      console.log('[LevelUp] No valid channel found, skipping announcement');
+      return {
+        currencyReward: 0,
+        premiumReward: 0
+      };
+    }
+
     // Calculate level-up rewards
     const currencyReward = newLevel * 50; // Scales with level
     const premiumReward = Math.floor(newLevel / 5); // Every 5 levels = 1 gem
-    
+
     // Check for milestone levels (5, 10, 25, 50, 100)
     const milestones = [5, 10, 25, 50, 100];
     const isMilestone = milestones.includes(newLevel);
-    
+
     // Get unlocked features
     const unlocks = getUnlocksForLevel(newLevel);
-    
+
     // Build embed
     const embed = {
       color: isMilestone ? config.colors.warning : config.colors.success,
@@ -58,9 +105,9 @@ module.exports = {
         inline: false
       });
     }
-    
-    await channel.send({ embeds: [embed] });
-    
+
+    await targetChannel.send({ embeds: [embed] });
+
     return {
       currencyReward: isMilestone ? currencyReward + (newLevel * 100) : currencyReward,
       premiumReward
