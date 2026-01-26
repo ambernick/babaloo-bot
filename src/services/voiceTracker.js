@@ -151,7 +151,8 @@ class VoiceTracker {
                         textChannel,
                         member.user,
                         xpResult.oldLevel,
-                        xpResult.newLevel
+                        xpResult.newLevel,
+                        this.client
                       );
 
                       // Award level-up rewards
